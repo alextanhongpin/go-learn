@@ -354,7 +354,16 @@ Note that both arrays must be of the same type. Appending a `string` array to an
 
 ## 10. It's fast
 
-Here's a benchmark of a "hello world" request using [wrk](https://github.com/wg/wrk). 
+Here's a benchmark of a "hello world" request using [wrk](https://github.com/wg/wrk). View the full report below:
+
+| Language      | No. Thread | No. Connection | Requests/sec | Latency  |
+| --            | --         | --             | --           | --       |
+| nodejs        | 1          | 1              | 19606.26     | 53.87us  |
+| go + stdlib   | 1          | 1              | 19154.60     | 49.98us  |
+| go + fasthttp | 1          | 1              | *27179.54*   | 39.84us  |
+| nodejs        | 10         | 10             | 27627.49     | 360.79us |
+| go + stdlib   | 10         | 10             | 52090.76     | 452.68us |
+| go + fasthttp | 10         | 10             | *77635.80*   | 177.69us |
 
 1 threads and 1 connections: 
 
