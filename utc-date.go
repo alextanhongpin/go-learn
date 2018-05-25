@@ -19,4 +19,6 @@ func main() {
 	}
 	log.Println(t)
 	fmt.Println(time.Now().Format("2006.01.02"))
+	// RFC3339 Date
+	log.Println(time.Now().UTC().Format(time.RFC3339))
 }
