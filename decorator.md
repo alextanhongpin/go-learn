@@ -1,3 +1,5 @@
+## Decorator Pattern
+
 An example of decorator pattern in golang.
 
 https://www.youtube.com/watch?v=xyDkyFjzFVc
@@ -131,7 +133,7 @@ func main() {
 	cli := Decorate(http.DefaultClient,
 		Authorization("kxch12e12w1wascas"),
 		LoadBalancing(RoundRobin(0, "web01", "web02", "web03")),
-		Logging(log.New(od.Stdout, "client:", log.LstdFlags)),
+		Logging(log.New(os.Stdout, "client:", log.LstdFlags)),
 		Instrumentation(
 			NewCounter("client.requests"),
 			NewHistogram("client.latency", 0, 10e9, 3, 50, 90, 95, 99),
@@ -140,4 +142,67 @@ func main() {
 	)
 
 }
+```
+
+## Another Example
+
+```golang
+package main
+
+import (
+	"log"
+	"os"
+	"time"
+)
+
+type Service interface {
+	Echo(msg string)
+}
+
+type service struct{}
+
+func (s *service) Echo(msg string) {
+	log.Println(msg)
+}
+
+type EchoFunc func(msg string)
+
+func (f EchoFunc) Echo(msg string) {
+	f(msg)
+}
+
+type Decorator func(Service) Service
+
+func Logging(l *log.Logger) Decorator {
+	return func(s Service) Service {
+		return EchoFunc(func(msg string) {
+			defer func(start time.Time) {
+				l.Println("took:", time.Since(start))
+			}(time.Now())
+			l.Println("start")
+			s.Echo(msg)
+			l.Println("end")
+		})
+	}
+}
+
+func Decorate(s Service, ds ...Decorator) Service {
+	decorated := s
+	for _, decorator := range ds {
+		decorated = decorator(decorated)
+	}
+	return decorated
+}
+func main() {
+
+	s := &service{}
+
+	// Without decorator
+	s.Echo("hello")
+
+	// With decorator
+	decoratedS := Decorate(s, Logging(log.New(os.Stdout, "client:", log.LstdFlags)))
+	decoratedS.Echo("hello")
+}
+
 ```
