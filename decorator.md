@@ -157,6 +157,7 @@ import (
 
 type Service interface {
 	Echo(msg string)
+	Cry()
 }
 
 type service struct{}
@@ -165,26 +166,63 @@ func (s *service) Echo(msg string) {
 	log.Println(msg)
 }
 
-type EchoFunc func(msg string)
-
-func (f EchoFunc) Echo(msg string) {
-	f(msg)
+func (s *service) Cry() {
+	log.Println("cry")
 }
 
-type Decorator func(Service) Service
+type loggingMiddleware struct {
+	l *log.Logger
+	s Service
+}
+
+func (m loggingMiddleware) Echo(msg string) {
+	m.l.Println("echoFn")
+	m.s.Echo(msg)
+}
+
+func (m loggingMiddleware) Cry() {
+	m.l.Println("cryFn")
+	m.s.Cry()
+}
 
 func Logging(l *log.Logger) Decorator {
 	return func(s Service) Service {
-		return EchoFunc(func(msg string) {
-			defer func(start time.Time) {
-				l.Println("took:", time.Since(start))
-			}(time.Now())
-			l.Println("start")
-			s.Echo(msg)
-			l.Println("end")
-		})
+		return &loggingMiddleware{
+			s: s,
+			l: l,
+		}
 	}
 }
+
+type timeitMiddleware struct {
+	l *log.Logger
+	s Service
+}
+
+func (m timeitMiddleware) Echo(msg string) {
+	defer func(start time.Time) {
+		m.l.Println("echo took:", time.Since(start))
+	}(time.Now())
+	m.s.Echo(msg)
+}
+
+func (m timeitMiddleware) Cry() {
+	defer func(start time.Time) {
+		m.l.Println("cry took:", time.Since(start))
+	}(time.Now())
+	m.s.Cry()
+}
+
+func Timeit(l *log.Logger) Decorator {
+	return func(s Service) Service {
+		return &timeitMiddleware{
+			s: s,
+			l: l,
+		}
+	}
+}
+
+type Decorator func(Service) Service
 
 func Decorate(s Service, ds ...Decorator) Service {
 	decorated := s
@@ -193,16 +231,19 @@ func Decorate(s Service, ds ...Decorator) Service {
 	}
 	return decorated
 }
+
 func main() {
 
 	s := &service{}
 
 	// Without decorator
 	s.Echo("hello")
+	s.Cry()
 
 	// With decorator
-	decoratedS := Decorate(s, Logging(log.New(os.Stdout, "client:", log.LstdFlags)))
+	l := log.New(os.Stdout, "client:", log.LstdFlags)
+	decoratedS := Decorate(s, Logging(l), Timeit(l))
 	decoratedS.Echo("hello")
+	decoratedS.Cry()
 }
-
 ```
