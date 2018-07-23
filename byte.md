@@ -17,3 +17,49 @@ Same as above, but explicitly converting the string to a slice first:
 ```go
 copy(arr[:], []byte(str))
 ```
+
+
+## Quick Sorting
+
+```go
+func main() {
+	dataset := make(map[string]interface{})
+	dataset["zeta"] = "1"
+	dataset["zzta"] = "2"
+	dataset["zata"] = "3"
+	dataset["cyta"] = "4"
+	dataset["eeta"] = "5"
+	dataset["1eta"] = "5"
+	dataset["aleta"] = "5"
+	dataset["ata"] = "5"
+
+	sorted := make([][]byte, 0, len(dataset))
+	for key := range dataset {
+		sorted = append(sorted, []byte(key))
+	}
+	for i := 0; i < len(sorted); i++ {
+		for j := i + 1; j < len(sorted); j++ {
+			if bytes.Compare(sorted[i][:], sorted[j][:]) > 0 {
+				sorted[i], sorted[j] = sorted[j], sorted[i]
+			}
+		}
+	}
+
+	log.Println(sorted)
+	for k, v := range sorted {
+		log.Println(k, string(v))
+	}
+}
+```
+
+Output:
+```bash
+2018/07/23 11:00:11 0 1eta
+2018/07/23 11:00:11 1 aleta
+2018/07/23 11:00:11 2 ata
+2018/07/23 11:00:11 3 cyta
+2018/07/23 11:00:11 4 eeta
+2018/07/23 11:00:11 5 zata
+2018/07/23 11:00:11 6 zeta
+2018/07/23 11:00:11 7 zzta
+```
