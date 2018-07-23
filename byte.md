@@ -18,6 +18,19 @@ Same as above, but explicitly converting the string to a slice first:
 copy(arr[:], []byte(str))
 ```
 
+## String to Fixed byte
+
+```go
+func main() {
+    s := "abc"
+    var a [20]byte
+    
+    // Copy the string to a fixed byte
+    copy(a[:], s)
+    fmt.Println("s:", []byte(s), "a:", a)
+}
+```
+
 
 ## Quick Sorting
 
