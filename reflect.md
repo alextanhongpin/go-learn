@@ -12,7 +12,7 @@ import (
 )
 
 type Test struct {
-	Name          string `json:"name,omitempty"`
+	Name          string `json:"name"`
 	Age           int    `json:"age,omitempty"`
 	EmailVerified bool   `json:"email_verified,omitempty"`
 }
@@ -56,7 +56,7 @@ func decode(in interface{}, u url.Values) error {
 			}
 			fieldName := f.Name
 			tagValue := u.Get(tags[0])
-			if tagValue == "" {
+			if len(strings.TrimSpace(tagValue)) == 0 {
 				continue
 			}
 			fieldByName := v.FieldByName(fieldName)
@@ -70,11 +70,7 @@ func decode(in interface{}, u url.Values) error {
 				tmp, _ := strconv.Atoi(tagValue)
 				fieldByName.SetInt(int64(tmp))
 			case reflect.Bool:
-				b := false
-				if tagValue == "true" {
-					b = true
-				}
-				fieldByName.SetBool(b)
+				fieldByName.SetBool(tagValue == "true")
 			}
 		}
 		return nil
@@ -82,6 +78,7 @@ func decode(in interface{}, u url.Values) error {
 		return nil
 	}
 }
+
 func encode(in interface{}) url.Values {
 	u := url.Values{}
 	t := reflect.TypeOf(in)
@@ -100,6 +97,9 @@ func encode(in interface{}) url.Values {
 				continue
 			}
 			name := tags[0]
+			if len(strings.TrimSpace(name)) == 0 {
+				continue
+			}
 			omitempty := strings.HasSuffix(tag, ",omitempty")
 
 			z := reflect.Zero(v.Type())
