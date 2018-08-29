@@ -1,7 +1,8 @@
-```go
+```golang
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net/url"
@@ -24,11 +25,15 @@ func main() {
 	}
 	out := encode(newTest)
 	fmt.Println("encode success:", out.Encode())
-	fmt.Println("decode success:", decode(&Test{}, out))
+	var res Test
+	if err := decode(&res, out); err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("decode success:", res)
 
 }
 
-func decode(in interface{}, u url.Values) interface{} {
+func decode(in interface{}, u url.Values) error {
 	t := reflect.TypeOf(in)
 	v := reflect.ValueOf(in)
 	if t.Kind() == reflect.Ptr {
@@ -37,7 +42,7 @@ func decode(in interface{}, u url.Values) interface{} {
 	}
 	// TODO: Return error
 	if !v.CanSet() {
-		log.Fatal("must be pointer")
+		return errors.New("must be pointer")
 	}
 	switch t.Kind() {
 	case reflect.Struct:
@@ -72,9 +77,9 @@ func decode(in interface{}, u url.Values) interface{} {
 				fieldByName.SetBool(b)
 			}
 		}
-		return in
+		return nil
 	default:
-		return in
+		return nil
 	}
 }
 func encode(in interface{}) url.Values {
