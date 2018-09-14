@@ -76,3 +76,25 @@ Output:
 2018/07/23 11:00:11 6 zeta
 2018/07/23 11:00:11 7 zzta
 ```
+
+## Concatenating bytes
+
+```
+package main
+
+import (
+	"fmt"
+)
+
+func main() {
+	b := append(append([]byte{}, []byte("hello ")...), []byte("world")...)
+	fmt.Println(string(b))
+	
+}
+```
+
+Output:
+
+```
+hello world
+```
