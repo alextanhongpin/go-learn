@@ -1,4 +1,4 @@
-```
+```golang
 package main
 
 import (
@@ -58,4 +58,54 @@ code 1 or 4 exist: true
 code 2 or 3 exist false
 code 2 or 4 exist false
 code 1 or 4 exist true
+```
+
+## Another example
+
+```go
+package main
+
+import "fmt"
+
+type Code int
+
+const (
+	None Code = 1 << iota
+	A
+	B
+	C
+)
+
+func (c Code) Has(codes Code) bool {
+	return c & codes != 0
+}
+
+func (c Code) Is(codes Code) bool {
+	return c&codes == c|codes
+}
+
+func main() {
+	var abc Code
+	abc |= A
+	abc |= B
+	abc |= C
+	abc |= A // Pass A twice, but there won't be duplicate.
+
+	fmt.Println("has A", abc.Has(A))
+	fmt.Println("has B", abc.Has(B))
+	fmt.Println("has C", abc.Has(C))
+	fmt.Println("has A, B", abc.Has(A|B))
+	fmt.Println("has B, C", abc.Has(B|C))
+	fmt.Println("has A, C", abc.Has(A|C))
+	fmt.Println("has A, B, C", abc.Has(A|B|C))
+
+	fmt.Println("is A", abc.Is(A))
+	fmt.Println("is B", abc.Is(B))
+	fmt.Println("is C", abc.Is(C))
+	fmt.Println("is A, B", abc.Is(A|B))
+	fmt.Println("is B, C", abc.Is(B|C))
+	fmt.Println("is A, C", abc.Is(A|C))
+	fmt.Println("is A, B, C", abc.Is(A|B|C))
+
+}
 ```
