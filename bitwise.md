@@ -81,6 +81,7 @@ func (c Code) Has(codes Code) bool {
 }
 
 func (c Code) Is(codes Code) bool {
+	// c | codes == codes
 	return c&codes == c|codes
 }
 
