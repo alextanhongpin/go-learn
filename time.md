@@ -1,4 +1,8 @@
-// This program demonstrates how to handle zero time
+
+## Zero time
+
+This program demonstrates how to handle zero time
+```go
 package main
 
 import (
@@ -25,3 +29,20 @@ func main() {
 
 	log.Println(b)
 }
+```
+
+## Local time
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func main() {
+	secondsEastOfUTC := int((8 * time.Hour).Seconds())
+	singapore := time.FixedZone("Singapore Time", secondsEastOfUTC)
+	fmt.Println(time.Now(), time.Now().In(singapore).Format(time.RFC3339))
+}
+```
