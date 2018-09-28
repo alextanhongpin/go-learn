@@ -2,7 +2,7 @@
 
 Surprisingly, both `A` and `B` now share the same struct methods!:
 
-```
+```golang
 package main
 
 import (
