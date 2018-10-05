@@ -5,31 +5,50 @@ package main
 
 import (
 	"fmt"
+	"math"
 )
 
+// Base62 character set, [a-zA-Z0-9].
+var base62Chars = [...]rune{
+	'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+	'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+	'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+}
+
+var base62Map map[rune]int
+
+const Base62 int64 = 62
+
+func init() {
+	base62Map = make(map[rune]int)
+	for k, v := range base62Chars {
+		base62Map[v] = k
+	}
+}
+
 func main() {
-	var base62Alphabets = [...]rune{
-		'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
-		'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
-		'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-	}
-	var hashDigits []int
-	dividend := 100
-	remainder := 0
-	for dividend > 0 {
-		remainder = dividend % 62
-		dividend = dividend / 62
-		// Prepend
-		hashDigits = append([]int{remainder}, hashDigits...)
-	}
+	hash := encode(100)
+	fmt.Println(hash)
+	fmt.Println(decode(hash))
+}
 
-	fmt.Println(hashDigits, dividend, remainder)
-
-	var hashString string
-	for _, v := range hashDigits {
-		hashString += string(base62Alphabets[v])
+func encode(in int64) string {
+	var out []rune
+	for in > 0 {
+		out = append([]rune{base62Chars[in%62]}, out...)
+		in /= 62
 	}
-	fmt.Println(hashString)
+	return string(out)
+}
+
+func decode(in string) int64 {
+	var sum int64
+	for i, v := range in {
+		pow := int64(len(in) - 1 - i)
+		p := math.Pow(float64(Base62), float64(pow))
+		sum += int64(p) * int64(base62Map[v])
+	}
+	return sum
 }
 ```
 
