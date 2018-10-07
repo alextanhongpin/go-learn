@@ -54,3 +54,24 @@ func print(name string, size uintptr) {
 	fmt.Println(name, "is", size, label)
 }
 ```
+Output:
+```
+empty struct struct{}{} is 0 bytes
+struct is 12 bytes
+
+default int is 4 bytes
+int8 is 1 byte
+int16 is 2 bytes
+int32 is 4 bytes
+int64 is 8 bytes
+
+rune 'a' is 4 bytes
+string "a" is 8 bytes
+string "ab" is 8 bytes
+
+bool "true" is 1 byte
+bool "false" is 1 byte
+
+slice []int{1,2,3} is 12 bytes
+string "hello" is 8 bytes
+```
