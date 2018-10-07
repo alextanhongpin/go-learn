@@ -30,6 +30,8 @@ func main() {
 
 	fmt.Println("")
 
+	// From https://blog.golang.org/strings:
+	// In short, Go source code is UTF-8, so the source code for the string literal is UTF-8 text.
 	print(`rune 'a'`, unsafe.Sizeof('a'))
 	print(`string "a"`, unsafe.Sizeof("a"))
 	print(`string "ab"`, unsafe.Sizeof("ab"))
