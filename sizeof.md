@@ -15,10 +15,28 @@ type Sample struct {
 	Age  int32  // Takes 4 bytes of storage.
 }
 
+// https://medium.com/@felipedutratine/how-to-organize-the-go-struct-in-order-to-save-memory-c78afcf59ec2
+// Each of them hold an array of size 8
+type BadOrder struct {
+	Bool1 bool // Takes 1 byte of storage.
+	Name string // Takes 8 bytes of storage.
+	Bool2 bool // Takes 1 bytes of storage.
+}
+
+// Age and IsBool can be placed in the same bucket.
+type GoodOrder struct {
+	Name string // Takes 8 bytes of storage.
+	// This would be grouped together
+	Bool1 bool // Takes 1 byte of storage.
+	Bool2 bool // Takes 1 byte of storage.
+}
+
 func main() {
 	// All measurements are in bytes.
 	print(`empty struct struct{}{}`, unsafe.Sizeof(struct{}{}))
 	print("struct", unsafe.Sizeof(Sample{}))
+	print("GoodOrder", unsafe.Sizeof(GoodOrder{}))
+	print("BadOrder", unsafe.Sizeof(BadOrder{}))
 
 	fmt.Println("")
 
@@ -40,12 +58,23 @@ func main() {
 
 	print(`bool "true"`, unsafe.Sizeof(true))
 	print(`bool "false"`, unsafe.Sizeof(false))
-	
+
 	fmt.Println("")
 
-	print(`slice []int{1,2,3}`, unsafe.Sizeof([]int{1,2,3}))
+	print(`slice []int{1,2,3}`, unsafe.Sizeof([]int{1, 2, 3}))
 	print(`string "hello"`, unsafe.Sizeof("hello"))
+
+	fmt.Println("")
 	
+	// To compare size
+	print("string", unsafe.Sizeof("abcdefghijklmnopqrstuvwxyz"))
+	print("bytes", unsafe.Sizeof([]byte("a")))
+	print("bytes", unsafe.Sizeof([]byte("abcdefghijklmnopqrstuvwxz")))
+	print("byte", unsafe.Sizeof(byte('a')))
+	print("rune", unsafe.Sizeof(rune('a')))
+	
+		fmt.Println("")
+		
 }
 
 func print(name string, size uintptr) {
@@ -60,6 +89,8 @@ Output:
 ```
 empty struct struct{}{} is 0 bytes
 struct is 12 bytes
+GoodOrder is 12 bytes
+BadOrder is 16 bytes
 
 default int is 4 bytes
 int8 is 1 byte
@@ -76,4 +107,14 @@ bool "false" is 1 byte
 
 slice []int{1,2,3} is 12 bytes
 string "hello" is 8 bytes
+
+string is 8 bytes
+bytes is 12 bytes
+bytes is 12 bytes
+byte is 1 byte
+rune is 4 bytes
 ```
+
+## Verifying memory usage.
+
+With the reflect package, we found jj
