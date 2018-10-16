@@ -115,6 +115,114 @@ byte is 1 byte
 rune is 4 bytes
 ```
 
-## Verifying memory usage.
+## Verifying memory usage
 
-With the reflect package, we found jj
+We can verify the memory usage in golang using this simple test. This is how the `main_test.go` looks like. For each types we are interested to test the size, we allocate 1million of those types.
+```go
+// main_test.go
+package main_test
+
+import (
+	"strings"
+	"testing"
+)
+
+const Million = 1000000
+
+func TestSliceInt32(t *testing.T) {
+	arr := make([]int32, Million)
+	for i := 0; i < Million; i++ {
+		arr[i] = int32(i)
+	}
+}
+
+func TestSliceInt64(t *testing.T) {
+	arr := make([]int64, Million)
+	for i := 0; i < Million; i++ {
+		arr[i] = int64(i)
+	}
+}
+
+func TestString(t *testing.T) {
+	arr := make([]string, Million)
+	for i := 0; i < Million; i++ {
+		arr[i] = "a"
+	}
+	strings.Join(arr, "")
+}
+
+func TestByte(t *testing.T) {
+	r := make([]byte, Million)
+	for i := 0; i < Million; i++ {
+		r[i] = 'a'
+	}
+}
+
+func TestRune(t *testing.T) {
+	r := make([]rune, Million)
+	for i := 0; i < Million; i++ {
+		r[i] = 'a'
+	}
+}
+
+func TestBool(t *testing.T) {
+	l := make([]bool, Million)
+	r := make([]bool, Million)
+	for i := 0; i < Million; i++ {
+		l[i] = true
+		r[i] = false
+	}
+}
+```
+
+To run the test with memory profiling:
+```bash
+$ go test -memprofile=mem.out
+```
+
+We can then run `go tool pprof mem.out`. Here's the output:
+
+```bash
+$ go tool pprof mem.out
+Type: alloc_space
+Time: Oct 16, 2018 at 11:13am (+08)
+Entering interactive mode (type "help" for commands, "o" for options)
+(pprof) top10
+Showing nodes accounting for 36.17MB, 100% of 36.17MB total
+      flat  flat%   sum%        cum   cum%
+   15.27MB 42.20% 42.20%    17.52MB 48.43%  _/Users/alextanhongpin/Documents/all/storage-test_test.TestString
+    7.63MB 21.10% 63.31%     7.63MB 21.10%  _/Users/alextanhongpin/Documents/all/storage-test_test.TestSliceInt64
+    3.82MB 10.57% 73.87%     3.82MB 10.57%  _/Users/alextanhongpin/Documents/all/storage-test_test.TestRune
+    3.82MB 10.57% 84.44%     3.82MB 10.57%  _/Users/alextanhongpin/Documents/all/storage-test_test.TestSliceInt32
+    2.25MB  6.22% 90.66%     2.25MB  6.22%  _/Users/alextanhongpin/Documents/all/storage-test_test.TestBool
+    2.25MB  6.22% 96.89%     2.25MB  6.22%  strings.Join
+    1.13MB  3.11%   100%     1.13MB  3.11%  _/Users/alextanhongpin/Documents/all/storage-test_test.TestByte
+         0     0%   100%    36.17MB   100%  testing.tRunner
+```
+
+We can dig into individual test to see where the memory is allocated using `list <FunctionName>`:
+
+```bash
+(pprof) list TestSliceInt64
+Total: 36.17MB
+ROUTINE ======================== _/Users/alextanhongpin/Documents/all/storage-test_test.TestSliceInt64 in /Users/alextanhongpin/Documents/all/storage-test/main_test.go
+    7.63MB     7.63MB (flat, cum) 21.10% of Total
+         .          .     13:		arr[i] = int32(i)
+         .          .     14:	}
+         .          .     15:}
+         .          .     16:
+         .          .     17:func TestSliceInt64(t *testing.T) {
+    7.63MB     7.63MB     18:	arr := make([]int64, Million)
+         .          .     19:	for i := 0; i < Million; i++ {
+         .          .     20:		arr[i] = int64(i)
+         .          .     21:	}
+         .          .     22:}
+         .          .     23:
+(pprof)
+```
+
+Here we see that 1 million int64 takes up 7.63MB. Remember that int64 takes up 8 bytes each, and to convert it to MB, we need to divide it by 1024 * 1024.
+
+```
+1e6 * 8 bytes / (1024 * 1024) = 7.63MB
+```
