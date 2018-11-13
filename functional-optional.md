@@ -39,3 +39,68 @@ func main() {
 	fmt.Println(opts)
 }
 ```
+
+
+## Using functional optional to decouple dependencies
+```go
+package main
+
+import (
+	"fmt"
+)
+
+func main() {
+	newClient := new(Client)
+	service := new(ClientService)
+	service.generator = func(s string) (string, error) {
+		return "hello", nil
+	}
+	service.Register(newClient)
+	fmt.Println(newClient)
+}
+
+type Client struct {
+	ClientID     string
+	ClientSecret string
+}
+
+type ClientMutator func(c *Client) error
+
+func ClientID(generator func(id string) (string, error)) ClientMutator {
+	return func(c *Client) error {
+		clientID, err := generator(c.ClientID)
+		if err != nil {
+			return err
+		}
+		c.ClientID = clientID
+		return nil
+	}
+}
+
+func ClientSecret(secret string) ClientMutator {
+	return func(c *Client) error {
+		c.ClientSecret = secret
+		return nil
+	}
+}
+
+type ClientService struct {
+	generator func(string) (string, error)
+}
+
+func (c *ClientService) Register(client *Client) *Client {
+	apply(client, ClientID(c.generator), ClientSecret("car"))
+	return client
+}
+
+func apply(client *Client, ops ...ClientMutator) error {
+	var err error
+	for _, o := range ops {
+		err = o(client)
+		if err != nil {
+			return err
+		}
+	}
+	return err
+}
+```
