@@ -104,3 +104,43 @@ func apply(client *Client, ops ...ClientMutator) error {
 	return err
 }
 ```
+
+## Another alternative
+```go
+package main
+
+import (
+	"fmt"
+)
+
+type Modifier func(u *User) error
+
+type User struct {
+	A, B, C string
+}
+
+type UserModifier struct {
+	User *User
+	
+}
+
+func (u *UserModifier) Apply(modifiers ...Modifier) error {
+	for _, m := range modifiers {
+		if err := m(u.User); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func main() {
+	aSetter := func(u *User) error {
+		u.A = "hello a"
+		return nil
+	}
+	u := new(User)
+	m := UserModifier{u}
+	m.Apply(aSetter)
+	fmt.Println("Hello, playground", m.User)
+}
+```
