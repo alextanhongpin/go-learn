@@ -185,6 +185,8 @@ func randomString(n int) (string, error) {
 
 ## Alternative with Builder 
 
+Sample builder with readOnly options.
+
 ```go
 package main
 
@@ -208,29 +210,53 @@ func NewToken() *Token {
 type TokenBuilder struct {
 	defaults Token
 	override func(t *Token)
+	readOnly bool // writable false
 }
 
-func NewTokenBuilder(defaults Token) *TokenBuilder {
-	return &TokenBuilder{
-		defaults: defaults,
+type TokenBuilderOptions func(t *TokenBuilder)
+
+func ReadOnly(readOnly bool) TokenBuilderOptions {
+	return func(t *TokenBuilder) {
+		t.readOnly = readOnly
 	}
 }
 
+func Defaults(defaults Token) TokenBuilderOptions {
+	return func(t *TokenBuilder) {
+		t.defaults = defaults
+	}
+}
+
+func NewTokenBuilder(opts ...TokenBuilderOptions) *TokenBuilder {
+	tb := TokenBuilder{}
+	for _, o := range opts {
+		o(&tb)
+	}
+	return &tb
+}
+
 func (t *TokenBuilder) SetSecret(secret string) {
+	if t.readOnly {
+		return
+	}
 	t.defaults.Secret = secret
 }
 
 func (t *TokenBuilder) SetCreatedAt(createdAt time.Time) {
+	if t.readOnly {
+		return
+	}
 	t.defaults.CreatedAt = createdAt
 }
 
 func (t *TokenBuilder) Build() *Token {
 	result := t.defaults
-	if t.override != nil {
+	if t.override != nil && !t.readOnly {
 		t.override(&result)
 	}
 	return &result
 }
+
 func (t *TokenBuilder) SetOverride(override func(t *Token)) {
 	t.override = override
 }
@@ -242,7 +268,7 @@ func GenerateToken(tb *TokenBuilder) *Token {
 }
 
 func main() {
-	tb := NewTokenBuilder(Token{})
+	tb := NewTokenBuilder()
 	token := tb.Build()
 	fmt.Printf("build empty: %#v\n", token)
 
@@ -258,7 +284,7 @@ func main() {
 	token = tb.Build()
 	fmt.Printf("build override: %#v\n", token)
 
-	tb2 := NewTokenBuilder(Token{CreatedAt: time.Now()})
+	tb2 := NewTokenBuilder(Defaults(Token{CreatedAt: time.Now()}))
 	token = GenerateToken(tb2)
 	fmt.Printf("build override: %#v\n", token)
 	tb2.SetOverride(func(t *Token) {
@@ -268,5 +294,13 @@ func main() {
 	})
 	token = GenerateToken(tb2)
 	fmt.Printf("build override: %#v\n", token)
+
+	tb3 := NewTokenBuilder(
+		Defaults(Token{Secret: "immutable_secret", CreatedAt: time.Now()}),
+		ReadOnly(true),
+	)
+	tb3.SetSecret("can't overwrite immutable_secret")
+	token = tb3.Build()
+	fmt.Printf("build readOnly: %#v\n", token)
 }
 ```
