@@ -182,3 +182,91 @@ func randomString(n int) (string, error) {
 	return base64.StdEncoding.EncodeToString(b), nil
 }
 ```
+
+## Alternative with Builder 
+
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+type Token struct {
+	CreatedAt time.Time
+	Secret    string
+}
+
+func NewToken() *Token {
+	return &Token{
+		CreatedAt: time.Now(),
+		Secret:    "randomly_generated_value",
+	}
+}
+
+type TokenBuilder struct {
+	defaults Token
+	override func(t *Token)
+}
+
+func NewTokenBuilder(defaults Token) *TokenBuilder {
+	return &TokenBuilder{
+		defaults: defaults,
+	}
+}
+
+func (t *TokenBuilder) SetSecret(secret string) {
+	t.defaults.Secret = secret
+}
+
+func (t *TokenBuilder) SetCreatedAt(createdAt time.Time) {
+	t.defaults.CreatedAt = createdAt
+}
+
+func (t *TokenBuilder) Build() *Token {
+	result := t.defaults
+	if t.override != nil {
+		t.override(&result)
+	}
+	return &result
+}
+func (t *TokenBuilder) SetOverride(override func(t *Token)) {
+	t.override = override
+}
+
+func GenerateToken(tb *TokenBuilder) *Token {
+	tb.SetSecret("random_secret")
+	tb.SetCreatedAt(time.Now())
+	return tb.Build()
+}
+
+func main() {
+	tb := NewTokenBuilder(Token{})
+	token := tb.Build()
+	fmt.Printf("build empty: %#v\n", token)
+
+	tb.SetSecret("secret")
+	tb.SetCreatedAt(time.Now())
+	token = tb.Build()
+	fmt.Printf("build after setting: %#v\n", token)
+
+	tb.SetOverride(func(t *Token) {
+		t.Secret = "overwrite secret"
+		t.CreatedAt = time.Unix(0, 0)
+	})
+	token = tb.Build()
+	fmt.Printf("build override: %#v\n", token)
+
+	tb2 := NewTokenBuilder(Token{CreatedAt: time.Now()})
+	token = GenerateToken(tb2)
+	fmt.Printf("build override: %#v\n", token)
+	tb2.SetOverride(func(t *Token) {
+		// This is useful, because you can test the randomly generated values, as well as mocking them to your desired result.
+		t.Secret = "overwritten: " + t.Secret
+		t.CreatedAt = time.Unix(0, 0)
+	})
+	token = GenerateToken(tb2)
+	fmt.Printf("build override: %#v\n", token)
+}
+```
