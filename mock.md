@@ -32,79 +32,97 @@ func NewToken(expiresIn int64) (*Token, error) {
 	}, nil
 }
 
+// TokenFactory takes an input/request/params that is needed to produce an output.
 type TokenFactory interface {
-	Build() (*Token, error)
+	Build(...TokenModifier) (*Token, error)
 }
 
 type tokenFactory struct {
 	// Takes a default, and populate the random values.
 	// Can also take a pointer to an existing data, and RESETS the values to defaults.
-	defaults  Token
+	defaults Token
+
+	// A list of initial modifiers that does not need arguments.
 	modifiers []TokenModifier
+
+	// The final modifier that overwrites everything. Useful for mocking.
+	override TokenModifier
+}
+
+func (t *tokenFactory) SetOverride(override TokenModifier) {
+	t.override = override
 }
 
 func NewTokenFactory(defaults Token, modifiers ...TokenModifier) *tokenFactory {
-	return &tokenFactory{defaults, modifiers}
+	return &tokenFactory{
+		defaults:  defaults,
+		modifiers: modifiers,
+	}
 }
 
 func (t *tokenFactory) Build(extras ...TokenModifier) (*Token, error) {
 	var err error
+	// Make a copy.
 	token := t.defaults
+	// For each of them, apply the modifier. This works if you do not need to set the values in the correct order.
+	// If you need that, defined each of them as a pipeline steps.
 	for _, mod := range append(t.modifiers, extras...) {
 		err = mod(&token)
 		if err != nil {
 			return nil, err
 		}
 	}
+	// Overrides everything, this makes testing easier.
+	if t.override != nil {
+		t.override(&token)
+	}
 	return &token, err
 }
 
 type Service interface {
-	CreateToken() (*Token, error)
+	// No matter what, there are mutation values that needs to be passed from outside the function to mock.
+	CreateToken(now time.Time) (*Token, error)
 }
 
 type service struct {
-	tokenFactory        *tokenFactory
-	higherOrderModifier func(time.Time, int64) TokenModifier
+	tokenFactory *tokenFactory
 }
 
-func setExpiredAt(tm time.Time, duration int64) TokenModifier {
+// A unit of work.
+func makeExpireAtModifier(tm time.Time) TokenModifier {
 	return func(t *Token) error {
-		t.ExpireAt = tm.Add(time.Duration(duration) * time.Second).Unix()
+		t.ExpireAt = tm.Add(time.Duration(t.ExpiresIn) * time.Second).Unix()
 		return nil
 	}
 }
 
-func setTokenValue() TokenModifier {
-	return func(t *Token) error {
-		var err error
-		t.Value, err = randomString(32)
-		return err
-	}
+func valueModifier(t *Token) error {
+	var err error
+	t.Value, err = randomString(32)
+	return err
 }
 
-func NewService(tf *tokenFactory, setExpiredAt func(tm time.Time, duration int64) TokenModifier) *service {
+func NewService(tf *tokenFactory) *service {
 	return &service{
-		higherOrderModifier: setExpiredAt,
-		tokenFactory:        tf,
+		tokenFactory: tf,
 	}
 }
 
 func (s *service) CreateToken(now time.Time) (*Token, error) {
-	token, err := s.tokenFactory.Build(s.higherOrderModifier(now, 3600))
-	return token, err
+	// If we need to pass down modifiers with argument, do it in the function to mock.
+	return s.tokenFactory.Build(makeExpireAtModifier(now))
 }
 
 func main() {
 	// Create a factory for a token factory.
 	defaults := Token{ExpiresIn: 3600}
-	modifiers := []TokenModifier{setTokenValue()}
-	tb := NewTokenFactory(defaults, modifiers...)
-	token, err := tb.Build()
+	modifiers := []TokenModifier{valueModifier}
+	tf := NewTokenFactory(defaults, modifiers...)
+	token, err := tf.Build(makeExpireAtModifier(time.Now()))
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("ori:", token)
+	fmt.Printf("ori: %+v\n", token)
 	// What if I need to use the input for building the response?
 
 	// Create a mock token builder - which will just return back anything that we set.
@@ -114,36 +132,36 @@ func main() {
 	defaults = Token{
 		Value:     "xyz",
 		ExpiresIn: 3600,
+		ExpireAt:  -100,
 	}
-	mtb := NewTokenFactory(defaults)
-	token, err = mtb.Build()
+	tf = NewTokenFactory(defaults)
+	token, err = tf.Build()
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("mock:", token)
+	fmt.Printf("no modifiers: %+v\n", token)
 
 	// Create new service
-	svc := NewService(mtb, setExpiredAt)
+	svc := NewService(tf)
 	token, err = svc.CreateToken(time.Now())
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println(token)
+	fmt.Printf("service: %+v\n", token)
 
-	// mock the set expired at
-	mockSetExpiredAt := func(tm time.Time, duration int64) TokenModifier {
-		return func(t *Token) error {
-			t.ExpireAt = 0
-			return nil
-		}
-	}
-	// Create new service
-	svc = NewService(mtb, mockSetExpiredAt)
+	// Set an override for the token factory.
+	tf.SetOverride(func(t *Token) error {
+		t.ExpiresIn = 0
+		t.ExpireAt = 0
+		t.Value = "mocked"
+		return nil
+	})
+
 	token, err = svc.CreateToken(time.Now())
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println(token)
+	fmt.Printf("override: %+v\n", token)
 
 }
 
