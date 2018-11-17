@@ -53,6 +53,168 @@ func main() {
 	fmt.Println("Hello, playground", token)
 }
 ```
+
+## More advance builder
+
+```go
+package main
+
+import (
+	"crypto/rand"
+	"encoding/base64"
+	"errors"
+	"fmt"
+	"log"
+)
+
+type Signer struct {
+	A, B, C string
+}
+
+type SignerModifier func(s *Signer) error
+type SignerBuilder struct {
+	defaults Signer
+	override SignerModifier
+}
+
+func (s *SignerBuilder) Build(modifiers ...SignerModifier) (*Signer, error) {
+	var err error
+	result := s.defaults
+	for _, mod := range modifiers {
+		err = mod(&result)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if s.override != nil {
+		s.override(&result)
+	}
+	return &result, err
+}
+
+func (s *Signer) Sign() (string, error) {
+	if s.A == "" || s.B == "" || s.C == "" {
+		return "", errors.New("empty params")
+	}
+	return s.A + " " + s.B + " " + s.C, nil
+}
+
+func main() {
+	sb := new(SignerBuilder)
+	modifiersA := []SignerModifier{
+		func(s *Signer) (err error) {
+			s.A, err = randomString(10)
+			return
+		},
+		func(s *Signer) (err error) {
+			s.B, err = randomString(20)
+			return
+		},
+		func(s *Signer) (err error) {
+			s.C, err = randomString(40)
+			return
+		},
+	}
+	modifiersB := []SignerModifier{
+		func(s *Signer) error {
+			s.A = "custom A"
+			s.B = "custom B"
+			s.C = "custom C"
+			return nil
+		},
+	}
+	signer, err := sb.Build(modifiersA...)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("build 1: %#v\n", signer)
+
+	// Repeat the build. It should return different results.
+	signer, err = sb.Build(modifiersA...)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("build 2: %#v\n", signer)
+
+	// You can build with other modifiers...
+	signer, err = sb.Build(modifiersB...)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("build 3: %#v\n", signer)
+
+	sb.override = func(s *Signer) error {
+		s.A = "a"
+		s.B = "b"
+		s.C = "c"
+		return nil
+	}
+	signer, err = sb.Build(modifiersA...)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("override: %#v\n", signer)
+	// Clear the override.
+	sb.override = nil
+
+	// How about just building from defaults?
+	sb2 := SignerBuilder{
+		defaults: Signer{A: "default A", B: "default B", C: "default C"},
+	}
+	// We do not pass in any modifier, which means it will just return the defaults as it is.
+	// This is useful, since we can just pass in the default values from envvars, rather than
+	// assigning it to another variable and passing it down to the function.
+	signer, err = sb2.Build()
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("with defaults: %#v\n", signer)
+
+	// What if the modifier requires additional parameters?
+	// Option 1: Pass the modifier on the spot.
+	n := 10
+	signer, err = sb.Build(
+		func(s *Signer) (err error) {
+			s.A, err = randomString(n)
+			return
+		},
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("with request params: %#v\n", signer)
+
+	// Option 2: Higher-order modifier
+	higherOrderModifier := func(n int) SignerModifier {
+		return func(s *Signer) (err error) {
+			s.A, err = randomString(n)
+			return
+		}
+	}
+	m := 10
+	signer, err = sb.Build(higherOrderModifier(m))
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("with request params: %#v\n", signer)
+
+}
+
+func randomBytes(n int) ([]byte, error) {
+	b := make([]byte, n)
+	_, err := rand.Read(b)
+	return b, err
+}
+
+func randomString(n int) (string, error) {
+	b, err := randomBytes(n)
+	if err != nil {
+		return "", err
+	}
+	s := base64.StdEncoding.EncodeToString(b)
+	return s, err
+}
+```
 ## Mock
 
 ```go
