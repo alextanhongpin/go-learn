@@ -31,12 +31,20 @@ func (t *TokenBuilder) Build(modifiers ...TokenModifier) *Token {
 
 func main() {
 	tb := new(TokenBuilder)
+	tb.override = func(t *Token) {
+		// Test the original implementation.
+		fmt.Println(t.A, t.B)
+		// Then mock them for testing.
+		t.A = "override a"
+		t.B = "override b"
+	}
 	token := tb.Build(
 		func(t *Token) { t.A = "a" },
 		func(t *Token) { t.B = "b" },
 	)
 	fmt.Println("Hello, playground", token)
 }
+
 ```
 ## Mock
 
