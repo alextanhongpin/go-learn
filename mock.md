@@ -62,7 +62,6 @@ package main
 import (
 	"crypto/rand"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"log"
 )
@@ -92,11 +91,28 @@ func (s *SignerBuilder) Build(modifiers ...SignerModifier) (*Signer, error) {
 	return &result, err
 }
 
-func (s *Signer) Sign() (string, error) {
-	if s.A == "" || s.B == "" || s.C == "" {
-		return "", errors.New("empty params")
+type StringOptions struct {
+	n int
+}
+type StringModifier func(s *StringOptions)
+type StringBuilder struct {
+	options  StringOptions
+	override func(StringOptions) (string, error)
+}
+
+func (s *StringBuilder) Build(modifier ...StringModifier) (string, error) {
+	opts := s.options
+	for _, mod := range modifier {
+		mod(&opts)
 	}
-	return s.A + " " + s.B + " " + s.C, nil
+	str, err := randomString(opts.n)
+	if err != nil {
+		return "", err
+	}
+	if s.override != nil {
+		return s.override(opts)
+	}
+	return str, nil
 }
 
 func main() {
@@ -198,6 +214,26 @@ func main() {
 	}
 	fmt.Printf("with request params: %#v\n", signer)
 
+	strb := &StringBuilder{options: StringOptions{n: 20}}
+	// If dependency A is a dependency of B, the we just need to overwrite dependency B to get the final result.
+	strb.override = func(opts StringOptions) (string, error) {
+		return "mock_string", nil
+	}
+	sb.override = func(s *Signer) (err error) {
+		fmt.Println("s", s.A)
+		s.A = "override_mock_string"
+		return
+	}
+	signer, err = sb.Build(
+		func(s *Signer) (err error) {
+			s.A, err = strb.Build()
+			return
+		},
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("build signer with another builder: %#v\n", signer)
 }
 
 func randomBytes(n int) ([]byte, error) {
