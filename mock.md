@@ -1,3 +1,43 @@
+## Simple builder
+
+```go
+package main
+
+import (
+	"fmt"
+)
+
+type Token struct {
+	A, B, C string
+}
+
+type TokenModifier func(t *Token)
+
+type TokenBuilder struct {
+	defaults Token
+	override TokenModifier
+}
+
+func (t *TokenBuilder) Build(modifiers ...TokenModifier) *Token {
+	result := t.defaults
+	for _, mod := range modifiers {
+		mod(&result)
+	}
+	if t.override != nil {
+		t.override(&result)
+	}
+	return &result
+}
+
+func main() {
+	tb := new(TokenBuilder)
+	token := tb.Build(
+		func(t *Token) { t.A = "a" },
+		func(t *Token) { t.B = "b" },
+	)
+	fmt.Println("Hello, playground", token)
+}
+```
 ## Mock
 
 ```go
