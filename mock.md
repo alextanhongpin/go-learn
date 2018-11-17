@@ -39,12 +39,19 @@ func main() {
 		t.B = "override b"
 	}
 	token := tb.Build(
+		// Update single params. Can be extracted as a function.
 		func(t *Token) { t.A = "a" },
 		func(t *Token) { t.B = "b" },
+		func(t *Token) {
+			// Update multiple params at the same time.
+			t.A = "aa"
+			t.B = "bb"
+			t.C = "cc"
+		},
 	)
+	// How about errors? We can simply return the error in the modifier if needed.
 	fmt.Println("Hello, playground", token)
 }
-
 ```
 ## Mock
 
