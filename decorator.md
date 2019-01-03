@@ -247,3 +247,45 @@ func main() {
 	decoratedS.Cry()
 }
 ```
+
+## Simple Decorator
+
+```go
+package main
+
+import (
+	"errors"
+	"log"
+)
+
+func main() {
+	exec := func(s string) error {
+		return errors.New("fake error")
+	}
+
+	execRetry := Retry(exec)
+
+	err := execRetry("hello")
+	if err != nil {
+		log.Println(err)
+	}
+}
+
+type Exec func(string) error
+
+func Retry(fn Exec) Exec {
+	return func(s string) error {
+		var err error
+		for i := 0; i < 3; i++ {
+			err = fn(s)
+			if err != nil {
+				log.Println("retry", i)
+				continue
+			}
+			break
+		}
+		return err
+	}
+}
+```
+
