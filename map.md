@@ -1,5 +1,5 @@
 # Selecting random items from map
-```
+```go
 package main
 
 import (
@@ -61,4 +61,61 @@ BenchmarkRandomMapLoop-4           50000             36690 ns/op            1506
 BenchmarkRandomMapSlice-4         100000             12307 ns/op            1921 B/op          3 allocs/op
 PASS
 ok      github.com/alextanhongpin/balancer      3.554s
+```
+
+## Concurrent Map
+
+Unfortunately `go` does not have generics, so for every new map with different key-value combination, we need to define a new concurrent map.
+
+```go
+package main
+
+import (
+	"fmt"
+	"sync"
+)
+
+type ConcurrentMap struct {
+	sync.RWMutex
+	data map[string]int
+}
+
+func (c *ConcurrentMap) Add(key string, value int) {
+	c.Lock()
+	c.data[key] = value
+	c.Unlock()
+}
+func (c *ConcurrentMap) Delete(key string) {
+	c.Lock()
+	delete(c.data, key)
+	c.Unlock()
+}
+
+func (c *ConcurrentMap) Get(key string) int {
+	c.RLock()
+	value, exist := c.data[key]
+	c.RUnlock()
+	if !exist {
+		return -1
+	}
+	return value
+}
+
+func NewConcurrentMap() *ConcurrentMap {
+	return &ConcurrentMap{
+		data: make(map[string]int),
+	}
+}
+
+func main() {
+	cmap := NewConcurrentMap()
+	cmap.Add("a", 1)
+
+	val := cmap.Get("a")
+	fmt.Println(val)
+
+	cmap.Delete("a")
+	val = cmap.Get("a")
+	fmt.Println(val)
+}
 ```
