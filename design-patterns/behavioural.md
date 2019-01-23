@@ -126,4 +126,160 @@ func main() {
 ## Chain of Responsibility
 
 ```go
+package main
+
+import (
+	"fmt"
+	"io"
+	"strings"
+)
+
+type ChainLogger interface {
+	Next(string)
+}
+
+type FirstLogger struct {
+	NextChain ChainLogger
+}
+
+func (f *FirstLogger) Next(s string) {
+	fmt.Printf("First logger: %s\n", s)
+	if f.NextChain != nil {
+		f.NextChain.Next(s)
+	}
+}
+
+type SecondLogger struct {
+	NextChain ChainLogger
+}
+
+func (l *SecondLogger) Next(s string) {
+	if strings.Contains(strings.ToLower(s), "hello") {
+		fmt.Printf("Second logger: %s\n", s)
+
+		if l.NextChain != nil {
+			l.NextChain.Next(s)
+		}
+		return
+	}
+	fmt.Println("finishing in second logging")
+}
+
+type WriterLogger struct {
+	NextChain ChainLogger
+	Writer    io.Writer
+}
+
+func (w *WriterLogger) Next(s string) {
+	if w.Writer != nil {
+		w.Writer.Write([]byte("WriterLogger: " + s))
+	}
+	if w.NextChain != nil {
+		w.NextChain.Next(s)
+	}
+}
+
+type myTestWriter struct {
+	receivedMessage *string
+}
+
+func (m *myTestWriter) Write(p []byte) (int, error) {
+	if m.receivedMessage == nil {
+		m.receivedMessage = new(string)
+	}
+	tmpMessage := fmt.Sprintf("%s%s", *m.receivedMessage, p)
+	m.receivedMessage = &tmpMessage
+	return len(p), nil
+}
+
+func (m *myTestWriter) Next(s string) {
+	m.Write([]byte(s))
+}
+
+type ClosureChain struct {
+	NextChain ChainLogger
+	Closure   func(string)
+}
+
+func (c *ClosureChain) Next(s string) {
+	if c.Closure != nil {
+		c.Closure(s)
+	}
+
+	if c.NextChain != nil {
+		c.Next(s)
+	}
+}
+func main() {
+	myWriter := myTestWriter{}
+
+	closureLogger := ClosureChain{
+		Closure: func(s string) {
+			fmt.Printf("My Closure Logger: %s\n", s)
+			myWriter.receivedMessage = &s
+		},
+	}
+
+	writerLogger := WriterLogger{Writer: &myWriter}
+	writerLogger.NextChain = &closureLogger
+	second := SecondLogger{NextChain: &writerLogger}
+	chain := FirstLogger{NextChain: &second}
+	chain.Next("message that breaks the chain")
+	fmt.Println(myWriter.receivedMessage)
+
+	chain.Next("hello\n")
+	fmt.Println(myWriter.receivedMessage)
+}
+```
+
+## Command
+
+```go
+package main
+
+import (
+	"fmt"
+)
+
+type Command interface {
+	Execute()
+}
+
+type ConsoleOutput struct {
+	message string
+}
+
+func (c *ConsoleOutput) Execute() {
+	fmt.Println(c.message)
+}
+
+func CreateCommand(s string) Command {
+	fmt.Println("creating command")
+	return &ConsoleOutput{
+		message: s,
+	}
+}
+
+type CommandQueue struct {
+	queue []Command
+}
+
+func (p *CommandQueue) AddCommand(c Command) {
+	p.queue = append(p.queue, c)
+	if len(p.queue) == 3 {
+		for _, command := range p.queue {
+			command.Execute()
+		}
+		p.queue = make([]Command, 3)
+	}
+
+}
+func main() {
+	queue := CommandQueue{}
+	queue.AddCommand(CreateCommand("first message"))
+	queue.AddCommand(CreateCommand("second message"))
+	queue.AddCommand(CreateCommand("third message"))
+	queue.AddCommand(CreateCommand("fourth message"))
+	queue.AddCommand(CreateCommand("fifth message"))
+}
 ```
