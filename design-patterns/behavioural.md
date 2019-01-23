@@ -585,3 +585,160 @@ func main() {
 	}
 }
 ```
+
+## State
+
+```go
+package main
+
+import (
+	"fmt"
+	"math/rand"
+	"os"
+	"time"
+)
+
+type GameState interface {
+	executeState(*GameContext) bool
+}
+type GameContext struct {
+	SecretNumber int
+	Retries      int
+	Won          bool
+	Next         GameState
+}
+
+type StartState struct {
+}
+
+func (s *StartState) executeState(c *GameContext) bool {
+	c.Next = &AskState{}
+
+	rand.Seed(time.Now().UnixNano())
+	c.SecretNumber = rand.Intn(10)
+	fmt.Println("Introduce a number of retries to set the difficulty:")
+	fmt.Fscanf(os.Stdin, "%d", &c.Retries)
+	return true
+}
+
+type AskState struct{}
+
+func (a *AskState) executeState(c *GameContext) bool {
+	fmt.Printf("Introduce a number between 0 and 10, you have %d tries left\n", c.Retries)
+	var n int
+	fmt.Fscanf(os.Stdin, "%d", &n)
+	c.Retries = c.Retries - 1
+	if n == c.SecretNumber {
+		c.Won = true
+		c.Next = &FinishState{}
+	}
+	if c.Retries == 0 {
+		c.Next = &FinishState{}
+	}
+	return true
+}
+
+type FinishState struct{}
+
+func (f *FinishState) executeState(c *GameContext) bool {
+	if c.Won {
+		c.Next = &WinState{}
+	} else {
+		c.Next = &LoseState{}
+	}
+	return true
+}
+
+type WinState struct{}
+
+func (w *WinState) executeState(c *GameContext) bool {
+	fmt.Println("congrats, you won")
+	return false
+}
+
+type LoseState struct{}
+
+func (l *LoseState) executeState(c *GameContext) bool {
+	fmt.Println("you lose")
+	return false
+}
+func main() {
+
+	start := StartState{}
+	game := GameContext{
+		Next: &start,
+	}
+
+	for game.Next.executeState(&game) {
+	}
+}
+```
+
+## Mediator
+
+TODO: Find examples
+
+## Observer
+
+```go
+package main
+
+import (
+	"fmt"
+)
+
+type Observer interface {
+	Notify(string)
+}
+
+type Publisher struct {
+	ObserverList []Observer
+}
+
+func (p *Publisher) AddObserver(o Observer) {
+	p.ObserverList = append(p.ObserverList, o)
+
+}
+
+func (p *Publisher) RemoveObserver(o Observer) {
+	var indexToRemove int
+
+	for i, observer := range p.ObserverList {
+		if observer == o {
+			indexToRemove = i
+			break
+		}
+	}
+	p.ObserverList = append(p.ObserverList[:indexToRemove], p.ObserverList[indexToRemove+1:]...)
+}
+
+func (p *Publisher) NotifyObservers(m string) {
+	fmt.Printf("Publisher received message '%s' to notify observers\n", m)
+	for _, o := range p.ObserverList {
+		o.Notify(m)
+	}
+}
+
+type TestObserver struct {
+	ID      int
+	Message string
+}
+
+func (p *TestObserver) Notify(m string) {
+	fmt.Printf("Observer %d: message '%s' received\n", p.ID, m)
+	p.Message = m
+}
+
+func main() {
+
+	testObserver1 := &TestObserver{1, ""}
+	testObserver2 := &TestObserver{2, ""}
+	testObserver3 := &TestObserver{3, ""}
+	publisher := Publisher{}
+	publisher.AddObserver(testObserver1)
+	publisher.AddObserver(testObserver2)
+	publisher.AddObserver(testObserver3)
+
+	publisher.NotifyObservers("new message")
+}
+```
