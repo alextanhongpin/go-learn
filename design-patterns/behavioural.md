@@ -402,3 +402,104 @@ func main() {
 	fmt.Println(ct)
 }
 ```
+
+
+## Memento, Facade and Command
+
+```go
+package main
+
+import (
+	"errors"
+	"fmt"
+)
+
+type Command interface {
+	GetValue() interface{}
+}
+
+type Volume byte
+
+func (v Volume) GetValue() interface{} {
+	return v
+}
+
+type Mute bool
+
+func (m Mute) GetValue() interface{} {
+	return m
+}
+
+type Memento struct {
+	memento Command
+}
+
+type originator struct {
+	Command Command
+}
+
+func (o *originator) NewMemento() Memento {
+	return Memento{memento: o.Command}
+}
+
+func (o *originator) ExtractAndStoreCommand(m Memento) {
+	o.Command = m.memento
+}
+
+type careTaker struct {
+	mementoStack []Memento
+}
+
+func (c *careTaker) Add(m Memento) {
+	c.mementoStack = append(c.mementoStack, m)
+}
+func (c *careTaker) Memento(i int) (Memento, error) {
+	if len(c.mementoStack) < i || i < 0 {
+		return Memento{}, errors.New("index not found")
+	}
+	return c.mementoStack[i], nil
+}
+func (c *careTaker) Pop() Memento {
+	if len(c.mementoStack) > 0 {
+		tempMemento := c.mementoStack[len(c.mementoStack)-1]
+		c.mementoStack = c.mementoStack[0 : len(c.mementoStack)-1]
+		return tempMemento
+	}
+	return Memento{}
+}
+
+type MementoFacade struct {
+	originator originator
+	careTaker  careTaker
+}
+
+func (m *MementoFacade) SaveSettings(c Command) {
+	m.originator.Command = c
+	m.careTaker.Add(m.originator.NewMemento())
+}
+
+func (m *MementoFacade) RestoreSettings(i int) Command {
+	mem, _ := m.careTaker.Memento(i)
+	m.originator.ExtractAndStoreCommand(mem)
+	return m.originator.Command
+}
+
+func main() {
+	m := MementoFacade{}
+
+	m.SaveSettings(Volume(4))
+	m.SaveSettings(Mute(true))
+
+	assertCommand(m.RestoreSettings(0))
+	assertCommand(m.RestoreSettings(1))
+}
+
+func assertCommand(c Command) {
+	switch v := c.(type) {
+	case Volume:
+		fmt.Println("Volume:", v)
+	case Mute:
+		fmt.Println("Mute:", v)
+	}
+}
+```
