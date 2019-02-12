@@ -9,7 +9,7 @@ func newContextWithRequestID(ctx context.Context, req *http.Request) context.Con
     if reqID == "" {
         reqID = generateRandomID()
     }
-
+    req.Header.Set("X-Request-ID", reqID)
     return context.WithValue(ctx, requestIDKey, reqID)
 }
 
