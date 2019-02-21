@@ -1,4 +1,4 @@
-```
+```go
 package main
 
 import (
@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-  // Connect to database.
+	// Connect to database.
 	db, err := database.New(...)
 	if err != nil {
 		log.Fatal(err)
