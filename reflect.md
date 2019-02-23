@@ -128,223 +128,6 @@ func encode(in interface{}) url.Values {
 ```
 
 
-## Nested custom tag
-```go
-package main
-
-import (
-	"fmt"
-	"reflect"
-	"strconv"
-	"strings"
-)
-
-const EXAMPLE = "example"
-
-type Request struct {
-	Name  string   `example:"hello"`
-	IDs   []string `example:"1,2,3"`
-	Age   int      `example:"1"`
-	Count int64    `example:"1000"`
-	Pages []int    `example:"1,2,3,4"`
-	// Car   *Car
-	AnotherCar Car
-}
-
-type Car struct {
-	Name string `example:"audi"`
-	Brand
-}
-
-type Brand struct {
-	Name string `example:"expensive"`
-}
-
-var typeOfSliceInt = reflect.TypeOf([]int{})
-var typeOfSliceString = reflect.TypeOf([]string{})
-
-func main() {
-
-	/*
-		res := deriveFromExample(req)
-		switch v, ok := res.(Request); ok {
-		case true:
-			fmt.Printf("%#v\n", v)
-			fmt.Printf("%#v\n", v.Car)
-		}
-	*/
-	req := Request{}
-	result := ParseExampleTag(req)
-	switch v := result.(type) {
-	case Request:
-		fmt.Printf("%+v\n", v)
-		fmt.Printf("%+v\n", v.AnotherCar)
-	}
-
-}
-
-func ParseExampleTag(in interface{}) interface{} {
-	t := reflect.TypeOf(in)
-	v := reflect.ValueOf(in)
-
-	var parse func(tEl reflect.Type, vEl reflect.Value) reflect.Value
-	parse = func(tEl reflect.Type, vEl reflect.Value) reflect.Value {
-		for i := 0; i < tEl.NumField(); i++ {
-			tField := tEl.Field(i)
-			vField := vEl.Field(i)
-			tagValue := tField.Tag.Get(EXAMPLE)
-			switch k := vField.Kind(); k {
-			case reflect.Slice:
-				switch vField.Type() {
-				case typeOfSliceInt:
-					value := strings.Split(tagValue, ",")
-					result := make([]int, len(value))
-					for i, v := range value {
-						out, _ := strconv.Atoi(v)
-						result[i] = out
-
-					}
-					vField.Set(reflect.ValueOf(result))
-					fmt.Println("is string int")
-
-				case typeOfSliceString:
-					value := strings.Split(tagValue, ",")
-					vField.Set(reflect.ValueOf(value))
-					fmt.Println("is string slice")
-				default:
-					fmt.Println("not handled")
-				}
-
-			case reflect.Int:
-				value, _ := strconv.Atoi(tagValue)
-				vField.Set(reflect.ValueOf(value))
-			case reflect.Int8:
-				value, _ := strconv.ParseInt(tagValue, 10, 8)
-				vField.Set(reflect.ValueOf(value))
-			case reflect.Int16:
-				value, _ := strconv.ParseInt(tagValue, 10, 16)
-				vField.Set(reflect.ValueOf(value))
-			case reflect.Int32:
-				value, _ := strconv.ParseInt(tagValue, 10, 32)
-				vField.Set(reflect.ValueOf(value))
-			case reflect.Int64:
-				value, _ := strconv.ParseInt(tagValue, 10, 64)
-				vField.Set(reflect.ValueOf(value))
-			case reflect.Ptr:
-				elem := vField.Type().Elem()
-				instance := reflect.New(elem)
-				fmt.Println("got new instance", instance.Interface())
-				// result := parse(reflect.TypeOf(tField), ptrInstance)
-			case reflect.Struct:
-				elem := vField.Type()
-				instance := reflect.New(elem)
-				out := ParseExampleTag(instance)
-				fmt.Println(out)
-				// t := reflect.TypeOf(tField)
-				// v := reflect.ValueOf(vField)
-				// out := parse(t, instance.Elem()).Interface()
-
-				// fmt.Println(out)
-				// vField.Set(reflect.ValueOf())
-			case reflect.String:
-				vField.SetString(tagValue)
-			default:
-				fmt.Println("unhandled", vField, tField, k)
-				vField.Set(reflect.ValueOf(tagValue))
-			}
-		}
-		return vEl
-	}
-
-	switch k := t.Kind(); k {
-	case reflect.Ptr:
-		tEl := t.Elem()
-		vEl := v.Elem()
-		return parse(tEl, vEl).Interface()
-	case reflect.Struct:
-		fmt.Println("is struct")
-		instance := reflect.New(t)
-		instanceElem := instance.Elem()
-		return parse(t, instanceElem).Interface()
-	default:
-		fmt.Println("not handled", k)
-	}
-	return nil
-}
-
-func deriveFromExample(req interface{}) interface{} {
-
-	typeOf := reflect.TypeOf(req)
-	valueOf := reflect.ValueOf(req)
-	if valueOf.CanSet() {
-		return deriveFromExample(valueOf.Interface())
-	}
-	switch k := typeOf.Kind(); k {
-	case reflect.Array, reflect.Chan, reflect.Map, reflect.Ptr, reflect.Slice:
-		fmt.Println("is pointer")
-		return deriveFromExample(valueOf.Interface())
-	case reflect.Struct:
-		instance := reflect.New(typeOf)
-		instanceElem := instance.Elem()
-
-		for i := 0; i < typeOf.NumField(); i++ {
-			vfield := valueOf.Field(i)
-			tfield := typeOf.Field(i)
-
-			instanceField := instanceElem.Field(i)
-
-			tagValue := tfield.Tag.Get("example")
-			switch k := vfield.Kind(); k {
-			case reflect.String:
-				instanceField.SetString(tagValue)
-			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-				v, _ := strconv.ParseInt(tagValue, 10, 64)
-				instanceField.SetInt(v)
-			case reflect.Slice:
-				values := strings.Split(tagValue, ",")
-				slice := reflect.MakeSlice(
-					tfield.Type,
-					len(values),
-					cap(values))
-				switch t := tfield.Type; t {
-				case typeOfSliceInt:
-					for j := 0; j < len(values); j++ {
-						v := slice.Index(j)
-						i, _ := strconv.Atoi(values[j])
-						v.Set(reflect.ValueOf(i))
-					}
-				default:
-					for j := 0; j < len(values); j++ {
-						v := slice.Index(j)
-						v.Set(reflect.ValueOf(values[j]))
-					}
-
-				}
-
-				instanceField.Set(slice)
-			case reflect.Struct:
-				instanceField.Set(reflect.ValueOf(deriveFromExample(vfield.Interface())))
-			case reflect.Ptr:
-				elem := vfield.Type().Elem()
-				ptrInstance := reflect.New(elem)
-				ptrInstanceElem := ptrInstance.Elem()
-				for j := 0; j < elem.NumField(); j++ {
-					elemField := elem.Field(j)
-					elemTagValue := elemField.Tag.Get("example")
-					ptrInstanceElem.Field(j).Set(reflect.ValueOf(elemTagValue))
-				}
-				instanceField.Set(ptrInstance)
-			default:
-				fmt.Printf("type %s is not handled\n", k)
-			}
-		}
-		return instanceElem.Interface()
-	default:
-		fmt.Println("not handled", k)
-		return nil
-	}
-}
-```
 
 ## Setting nested struct
 ```go
@@ -371,4 +154,104 @@ func main() {
 	v.Elem().FieldByIndex([]int{1}).Set(reflect.ValueOf(B{"car"}))
 	fmt.Println("Hello, playground", a)
 }
+```
+
+## Parsing nested struct
+
+```go
+package main
+
+import (
+	"fmt"
+	"reflect"
+)
+
+type B struct {
+	C string `example:"this is c"`
+}
+
+type D struct {
+	Name string `example:"john"`
+	*B
+}
+
+type A struct {
+	ID string `example:"this is id"`
+	*B
+	D
+}
+
+var tagName = "example"
+
+func main() {
+	// Setting nested struct.
+	var a A
+	out := ParseTag(a)
+	fmt.Println(out)
+	switch o := out.(type) {
+	case A:
+		fmt.Println(o, o.B, o.D, o.D.B)
+	}
+}
+
+func ParseTag(in interface{}) interface{} {
+	var parse func(in interface{}) reflect.Value 
+	parse = func(in interface{}) reflect.Value {
+		v := reflect.ValueOf(in)
+		switch k := v.Kind(); k {
+		case reflect.Struct:
+
+			t := reflect.TypeOf(in)
+			newEl := reflect.New(t)
+			el := newEl.Elem()
+
+			for i := 0; i < el.NumField(); i++ {
+				r := el.FieldByIndex([]int{i})
+				tagValue := t.Field(i).Tag.Get(tagName)
+
+				switch r.Kind() {
+				case reflect.Struct:
+					newStruct := reflect.New(reflect.TypeOf(r.Interface()))
+					out := parse(newStruct.Elem().Interface())
+					r.Set(reflect.ValueOf(out.Interface()))
+				case reflect.Ptr:
+					newStruct := reflect.New(reflect.TypeOf(r.Interface()).Elem())
+					out := parse(newStruct.Elem().Interface())
+					r.Set(out.Addr())
+				default:
+					r.Set(reflect.ValueOf(tagValue))
+				}
+			}
+			return el
+		case reflect.Ptr:
+			r := reflect.New(reflect.TypeOf(in).Elem())
+			out := parse(r.Elem().Interface())
+			return out
+		default:
+			return v
+		}
+	}
+
+	out := parse(in)
+	return out.Interface()
+}
+```
+
+## Creating new instance reflect
+
+Pointer:
+```go
+real := new(A)
+reflected := reflect.New(reflect.TypeOf(real).Elem()).Elem().Interface()
+fmt.Println(real)
+fmt.Println(reflected)
+```
+
+Struct:
+
+```go
+real := A{}
+reflected := reflect.New(reflect.TypeOf(real)).Elem().Interface()
+fmt.Println(real)
+fmt.Println(reflected)
 ```
