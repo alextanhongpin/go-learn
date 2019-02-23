@@ -162,8 +162,11 @@ func main() {
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
+	"strconv"
+	"strings"
 )
 
 type B struct {
@@ -173,29 +176,62 @@ type B struct {
 type D struct {
 	Name string `example:"john"`
 	*B
+	Strings []int `example:"car,paper,this"`
 }
 
 type A struct {
 	ID string `example:"this is id"`
 	*B
+	Numbers []int `example:"1,2,3"`
+	Strings []int `example:"car,paper,this"`
 	D
+	IsValid bool `example:"true"`
+	IsAge   bool `example:"false"`
+	IsNone  bool
+	Name    string   `json:"name" example:"hello"`
+	IDs     []string `json:"ids" example:"1,2,3"`
+	Age     int      `json:"age" example:"1"`
+	Count   int64    `json:"count" example:"1000"`
+	Pages   []int    `json:"pages" example:"1,2,3,4"`
 }
 
 var tagName = "example"
 
 func main() {
 	// Setting nested struct.
-	var a A
-	out := ParseTag(a)
-	fmt.Println(out)
-	switch o := out.(type) {
-	case A:
-		fmt.Println(o, o.B, o.D, o.D.B)
+	{
+
+		var a A
+		out := ParseTag(a)
+		fmt.Println(out)
+		switch o := out.(type) {
+		case A:
+			fmt.Printf("%#v\n", o)
+			fmt.Printf("%#v\n", o.B)
+			fmt.Printf("%#v\n", o.D)
+			fmt.Printf("%#v\n", o.D.B)
+		}
+	}
+	{
+		var a A
+		out := ParseTag(&a)
+		fmt.Println(out)
+		switch o := out.(type) {
+		case A:
+			fmt.Printf("%#v\n", o)
+			fmt.Printf("%#v\n", o.B)
+			fmt.Printf("%#v\n", o.D)
+			fmt.Printf("%#v\n", o.D.B)
+		}
+		b, _ := json.Marshal(out)
+		fmt.Println(string(b))
 	}
 }
 
+var reflectSliceIntType = reflect.TypeOf([]int{})
+
 func ParseTag(in interface{}) interface{} {
-	var parse func(in interface{}) reflect.Value 
+	var parse func(in interface{}) reflect.Value
 	parse = func(in interface{}) reflect.Value {
 		v := reflect.ValueOf(in)
 		switch k := v.Kind(); k {
@@ -218,6 +254,38 @@ func ParseTag(in interface{}) interface{} {
 					newStruct := reflect.New(reflect.TypeOf(r.Interface()).Elem())
 					out := parse(newStruct.Elem().Interface())
 					r.Set(out.Addr())
+				case reflect.Bool:
+					r.SetBool(tagValue == "true")
+				case reflect.Slice:
+
+					val := strings.Split(tagValue, ",")
+
+					switch r.Type() {
+					case reflectSliceIntType:
+						out := make([]int, len(val))
+						for i, v := range val {
+							out[i], _ = strconv.Atoi(v)
+						}
+						r.Set(reflect.ValueOf(out))
+
+					default:
+						r.Set(reflect.ValueOf(val))
+					}
+				case reflect.Int:
+					val, _ := strconv.Atoi(tagValue)
+					r.Set(reflect.ValueOf(val))
+				case reflect.Int8:
+					val, _ := strconv.ParseInt(tagValue, 10, 8)
+					r.Set(reflect.ValueOf(val))
+				case reflect.Int16:
+					val, _ := strconv.ParseInt(tagValue, 10, 16)
+					r.Set(reflect.ValueOf(val))
+				case reflect.Int32:
+					val, _ := strconv.ParseInt(tagValue, 10, 32)
+					r.Set(reflect.ValueOf(val))
+				case reflect.Int64:
+					val, _ := strconv.ParseInt(tagValue, 10, 64)
+					r.Set(reflect.ValueOf(val))
 				default:
 					r.Set(reflect.ValueOf(tagValue))
 				}
@@ -231,7 +299,6 @@ func ParseTag(in interface{}) interface{} {
 			return v
 		}
 	}
-
 	out := parse(in)
 	return out.Interface()
 }
