@@ -345,3 +345,30 @@ func deriveFromExample(req interface{}) interface{} {
 	}
 }
 ```
+
+## Setting nested struct
+```go
+package main
+
+import (
+	"fmt"
+	"reflect"
+)
+
+type B struct {
+	C string
+}
+type A struct {
+	ID string
+	B
+}
+
+func main() {
+	// Setting nested struct.
+	var a A
+	v := reflect.ValueOf(&a)
+	v.Elem().FieldByIndex([]int{0}).Set(reflect.ValueOf("hello"))
+	v.Elem().FieldByIndex([]int{1}).Set(reflect.ValueOf(B{"car"}))
+	fmt.Println("Hello, playground", a)
+}
+```
