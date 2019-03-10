@@ -38,8 +38,62 @@ func main() {
 }
 ```
 
+## With Termination, Single State
 
-## With Termination
+```go
+package main
+
+import (
+	"fmt"
+)
+
+type State string
+
+type StateMachine map[State]State
+
+func (s StateMachine) Next(prev State) (State, bool) {
+	next, exist := s[prev]
+	if !exist {
+		return Invalid, false
+	}
+	return next, next == Ended
+}
+
+const (
+	Started = State("^")
+	Ended   = State("$") // We need this to differentiate between non-existing state and completed state.
+	Invalid = State("invalid")
+
+	Submitted = State("submitted")
+	Approved  = State("approved")
+	Published = State("published")
+)
+
+func main() {
+	var states = StateMachine{
+		Started:   Submitted,
+		Submitted: Approved,
+		Approved:  Published,
+		Published: Ended,
+		Ended:     Ended,
+	}
+	var completed bool
+	var initialState = Started
+	state := initialState
+
+	for i := 0; i < 5; i++ {
+		fmt.Printf("prev: %s", state)
+		state, completed = states.Next(state)
+		fmt.Printf(" next: %s, completed: %t\n", state, completed)
+		// Break to avoid infinite loop.
+		if completed {
+			break
+		}
+	}
+}
+```
+
+## With Termination, Multiple States
 
 ```go
 package main
@@ -61,13 +115,14 @@ func (s States) Next(prev State) ([]State, bool) {
 }
 
 const (
-	Initialized = State("payment_initialized") // Start
-	Submitted   = State("payment_submitted")
-	Rejected    = State("payment_rejected")
-	Approved    = State("payment_approved") // End
+	Initialized = State("initialized") // Start
+	Submitted   = State("submitted")
+	Rejected    = State("rejected")
+	Approved    = State("approved") // End
 )
 
 func main() {
+	// Assuming the states are describing payment.
 	var states = States{
 		Initialized: []State{Submitted},
 		Submitted:   []State{Approved, Rejected},
@@ -77,18 +132,18 @@ func main() {
 	var initialState = Initialized
 	state := initialState
 	for i := 0; i < 3; i++ {
-		next, completed := states.Next(state)
+		choices, completed := states.Next(state)
 		if completed {
 			fmt.Println("completed")
 			break
 		}
-		state = next[0]
+		state = choices[0]
 		fmt.Printf("next state is: %s, completed: %t\n", state, completed)
 	}
 }
 ```
 
-## Using switch 
+## With switch, single state
 
 ```go
 package main
@@ -130,7 +185,7 @@ func Next(prev State) State {
 ```
 
 
-## With multiple states
+## With switch, multiple states
 ```go
 package main
 
