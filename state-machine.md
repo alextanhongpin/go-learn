@@ -53,8 +53,13 @@ type State string
 type StateMachine map[State][]State
 
 func (s StateMachine) Next(prev State) ([]State, bool) {
-	next, completed := s[prev]
-	return next, !completed
+	next, exist := s[prev]
+	return next, exist
+}
+
+func (s StateMachine) IsCompleted(prev State) bool {
+	next, exist := s[prev]
+	return exist && len(next) == 0
 }
 
 const (
@@ -69,24 +74,27 @@ func main() {
 		NotPaid:  []State{Pending},
 		Pending:  []State{Paid, Rejected},
 		Rejected: []State{Pending},
-		// Paid:            []State{Paid},
+		Paid:     []State{}, // There are no more states after paid.
 	}
 
 	var initialState = NotPaid
 	next, _ := states.Next(initialState)
-	fmt.Printf("%#v\n", next) // []main.State{"payment_pending"}
+	completed := states.IsCompleted(initialState)
+	fmt.Printf("%#v, completed: %t\n", next, completed)
 
 	next, _ = states.Next(next[0])
-	fmt.Printf("%#v\n", next) // []main.State{"paid", "payment_rejected"}
+	completed = states.IsCompleted(next[0])
+	fmt.Printf("%#v, completed: %t\n", next, completed)
 	{
 		// After paid, there are no other states. It should be completed.
-		_, completed := states.Next(next[0])
-		fmt.Printf("completed: %t\n", completed) // completed: true
+		completed := states.IsCompleted(next[0])
+		fmt.Printf("completed: %t\n", completed)
 	}
 	{
 		// If the payment is rejected, we go back to payment_pending.
 		next, _ := states.Next(next[1])
-		fmt.Printf("%#v\n", next) // []main.State{"payment_pending"}
+		completed := states.IsCompleted(initialState)
+		fmt.Printf("%#v, completed: %t\n", next, completed)
 	}
 }
 ```
