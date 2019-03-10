@@ -50,51 +50,129 @@ import (
 
 type State string
 
-type StateMachine map[State][]State
+type States map[State][]State
 
-func (s StateMachine) Next(prev State) ([]State, bool) {
+func (s States) Next(prev State) ([]State, bool) {
 	next, exist := s[prev]
-	return next, exist
-}
-
-func (s StateMachine) IsCompleted(prev State) bool {
-	next, exist := s[prev]
-	return exist && len(next) == 0
+	if !exist {
+		return nil, false
+	}
+	return next, len(next) == 0
 }
 
 const (
-	NotPaid  = State("")
-	Rejected = State("payment_rejected")
-	Pending  = State("payment_pending")
-	Paid     = State("paid")
+	Initialized = State("payment_initialized") // Start
+	Submitted   = State("payment_submitted")
+	Rejected    = State("payment_rejected")
+	Approved    = State("payment_approved") // End
 )
 
 func main() {
-	var states = StateMachine{
-		NotPaid:  []State{Pending},
-		Pending:  []State{Paid, Rejected},
-		Rejected: []State{Pending},
-		Paid:     []State{}, // There are no more states after paid.
+	var states = States{
+		Initialized: []State{Submitted},
+		Submitted:   []State{Approved, Rejected},
+		Rejected:    []State{Submitted},
+		Approved:    []State{}, // After approved, there are no other continuation.
 	}
-
-	var initialState = NotPaid
-	next, _ := states.Next(initialState)
-	completed := states.IsCompleted(initialState)
-	fmt.Printf("%#v, completed: %t\n", next, completed)
-
-	next, _ = states.Next(next[0])
-	completed = states.IsCompleted(next[0])
-	fmt.Printf("%#v, completed: %t\n", next, completed)
-	{
-		// After paid, there are no other states. It should be completed.
-		completed := states.IsCompleted(next[0])
-		fmt.Printf("completed: %t\n", completed)
+	var initialState = Initialized
+	state := initialState
+	for i := 0; i < 3; i++ {
+		next, completed := states.Next(state)
+		if completed {
+			fmt.Println("completed")
+			break
+		}
+		state = next[0]
+		fmt.Printf("next state is: %s, completed: %t\n", state, completed)
 	}
-	{
-		// If the payment is rejected, we go back to payment_pending.
-		next, _ := states.Next(next[1])
-		completed := states.IsCompleted(initialState)
-		fmt.Printf("%#v, completed: %t\n", next, completed)
+}
+```
+
+## Using switch 
+
+```go
+package main
+
+import (
+	"fmt"
+)
+
+func main() {
+	var initialState = Red
+	state := initialState
+	for i := 0; i < 3; i++ {
+		state = Next(state)
+		fmt.Println("next state is:", state)
+	}
+}
+
+type State string
+
+const (
+	Invalid = State("")
+	Red     = State("red")
+	Green   = State("green")
+	Yellow  = State("yellow")
+)
+
+func Next(prev State) State {
+	switch prev {
+	case Red:
+		return Green
+	case Green:
+		return Yellow
+	case Yellow:
+		return Red
+	default:
+		return Invalid
+	}
+}
+```
+
+
+## With multiple states
+```go
+package main
+
+import (
+	"fmt"
+)
+
+func main() {
+	var initialState = Initialized
+	state := initialState
+	for i := 0; i < 3; i++ {
+		states, completed := Next(state)
+		if completed {
+			fmt.Println("completed")
+			break
+		}
+		state = states[0]
+		fmt.Printf("next state is: %s, completed: %t\n", state, completed)
+	}
+}
+
+type State string
+
+const (
+	Initialized = State("payment_initialized") // Start
+	Submitted   = State("payment_submitted")
+	Rejected    = State("payment_rejected")
+	Approved    = State("payment_approved") // End
+)
+
+func Next(prev State) ([]State, bool) {
+	switch prev {
+	case Initialized:
+		return []State{Submitted}, false
+	case Submitted:
+		return []State{Approved, Rejected}, false
+	case Rejected:
+		return []State{Submitted}, false
+	case Approved:
+		return []State{}, true
+	default:
+		return []State{}, false
 	}
 }
 ```
