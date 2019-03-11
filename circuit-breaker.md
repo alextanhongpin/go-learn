@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+var ErrTooManyRequests = errors.New("too many requests")
+
 type Task func() (interface{}, error)
 
 type State struct {
@@ -17,8 +19,14 @@ type State struct {
 	failureCounter   int
 	failureThreshold int
 	successThreshold int
-	breakTime        time.Time
+	timer            time.Time
 	timeout          time.Duration
+}
+
+func (s *State) StartTimeoutTimer() {
+	s.Lock()
+	s.timer = time.Now()
+	s.Unlock()
 }
 
 func (s *State) IncrementSuccessCounter() {
@@ -45,8 +53,11 @@ func (s *State) ResetFailureCounter() {
 	s.Unlock()
 }
 
-func (s *State) IsTimeoutExpired() bool {
-	return time.Since(s.breakTime) > s.timeout
+func (s *State) IsTimeoutTimerExpired() bool {
+	s.RLock()
+	timer, timeout := s.timer, s.timeout
+	s.RUnlock()
+	return time.Since(timer) > timeout
 }
 
 func (s *State) IsFailureThresholdExceeded() bool {
@@ -88,7 +99,7 @@ func (c *Closed) Next() CircuitBreaker {
 }
 
 func (c *Closed) Handle(task Task) (interface{}, error) {
-	// do/ 	if operation succeeds
+	// do/	if operation succeeds
 	// 		return result
 	// 	else
 	// 		increment failure counter
@@ -107,13 +118,13 @@ type Opened struct {
 
 func NewOpened(state *State) *Opened {
 	// entry/ start timeout timer
-	state.breakTime = time.Now()
+	state.StartTimeoutTimer()
 	return &Opened{state}
 }
 
 func (o *Opened) Next() CircuitBreaker {
 	// timeout timer expired
-	if o.state.IsTimeoutExpired() {
+	if o.state.IsTimeoutTimerExpired() {
 		fmt.Println("is half-opened")
 		return NewHalfOpened(o.state)
 	}
@@ -122,7 +133,7 @@ func (o *Opened) Next() CircuitBreaker {
 
 func (o *Opened) Handle(task Task) (interface{}, error) {
 	// do /return failure
-	return nil, errors.New("timeout")
+	return nil, ErrTooManyRequests
 }
 
 type HalfOpened struct {
@@ -133,11 +144,11 @@ type HalfOpened struct {
 func NewHalfOpened(state *State) *HalfOpened {
 	// entry/ reset success counter
 	state.ResetSuccessCounter()
-	return &HalfOpened{state, 0}
+	return &HalfOpened{state: state}
 }
 
 func (h *HalfOpened) Handle(task Task) (interface{}, error) {
-	// do/ 	if operation succeeds
+	// do/	if operation succeeds
 	// 		increment success counter
 	// 		return result
 	// 	else
@@ -169,7 +180,7 @@ func (h *HalfOpened) Next() CircuitBreaker {
 }
 
 type CircuitBreakerImpl struct {
-	ctx CircuitBreaker
+	CircuitBreaker
 }
 
 func NewDefaultState() *State {
@@ -190,13 +201,8 @@ func NewCircuitBreaker(state *State) *CircuitBreakerImpl {
 }
 
 func (c *CircuitBreakerImpl) Handle(task Task) (interface{}, error) {
-	res, err := c.ctx.Handle(task)
-	if err != nil {
-		c.ctx = c.ctx.Next()
-		return nil, err
-	}
-	c.ctx = c.ctx.Next()
-	return res, err
+	c.CircuitBreaker = c.Next()
+	return c.CircuitBreaker.Handle(task)
 }
 
 func main() {
@@ -224,6 +230,12 @@ func main() {
 	for i := 0; i < 15; i++ {
 		res, err := cb.Handle(func() (interface{}, error) {
 			return true, nil
+		})
+		fmt.Println(res, err)
+	}
+	for i := 0; i < 20; i++ {
+		res, err := cb.Handle(func() (interface{}, error) {
+			return nil, errors.New("some error")
 		})
 		fmt.Println(res, err)
 	}
