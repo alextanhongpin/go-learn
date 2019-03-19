@@ -110,3 +110,60 @@ func main() {
 
 }
 ```
+
+## Use Case: Ensuring Steps are completed in order for state machine
+
+```go
+package main
+
+import (
+	"fmt"
+)
+
+type State uint
+
+const (
+	Initialised State = 1 << iota
+	Checkout
+	Submitted
+	Verified
+	Completed
+)
+
+var Steps = []State{Initialised, Checkout, Submitted, Verified, Completed}
+
+func main() {
+	validateSteps := func(state State, i int) bool {
+		for j, step := range Steps[:i] {
+			if step&state == 0 {
+				fmt.Println("skipped", j)
+				return false
+			}
+		}
+		return true
+	}
+	{
+		state := Initialised | Checkout
+		valid := validateSteps(state, 2)
+		fmt.Println(valid)
+	}
+
+	{
+		state := Initialised | Completed
+		valid := validateSteps(state, 2)
+		fmt.Println(valid)
+	}
+
+	{
+		state := Initialised | Checkout | Submitted | Verified | Completed
+		valid := validateSteps(state, 4)
+		fmt.Println(valid)
+	}
+
+	{
+		state := Initialised | Checkout | Submitted | Verified | Completed
+		valid := validateSteps(state, 5)
+		fmt.Println(valid)
+	}
+}
+```
