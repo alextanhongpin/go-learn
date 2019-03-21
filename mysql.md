@@ -211,3 +211,165 @@ func main() {
 }
 ```
 
+
+## Another alternative
+
+```go
+package main
+
+import (
+	"fmt"
+	"sort"
+	"strings"
+)
+
+type Field interface {
+	Name() string
+	Value() interface{}
+}
+
+type SqlString struct {
+	name  string
+	value string
+}
+
+func (s SqlString) Name() string {
+	return s.name
+}
+
+func (s SqlString) Value() interface{} {
+	return s.value
+}
+
+type SqlInt64 struct {
+	name  string
+	value int64
+}
+
+func (s SqlInt64) Name() string {
+	return s.name
+}
+
+func (s SqlInt64) Value() interface{} {
+	return s.value
+}
+
+type SqlFloat64 struct {
+	name  string
+	value float64
+}
+
+func (s SqlFloat64) Name() string {
+	return s.name
+}
+
+func (s SqlFloat64) Value() interface{} {
+	return s.value
+}
+
+type SqlBool struct {
+	name  string
+	value bool
+}
+
+func (s SqlBool) Name() string {
+	return s.name
+}
+
+func (s SqlBool) Value() interface{} {
+	return s.value
+}
+
+func NamedString(name, value string) SqlString {
+	return SqlString{name, value}
+}
+
+func NamedInt64(name string, value int64) SqlInt64 {
+	return SqlInt64{name, value}
+}
+
+func MapString(keys []string, fn func(string) string) []string {
+	result := make([]string, len(keys))
+	for i, key := range keys {
+		result[i] = fn(key)
+	}
+	return result
+}
+
+func Flatten(interfaces ...[]interface{}) []interface{} {
+	var result []interface{}
+	for _, i := range interfaces {
+		result = append(result, i...)
+	}
+	return result
+}
+
+func Parse(fields ...Field) ([]string, []interface{}) {
+	SortFields(fields)
+	keys := make([]string, len(fields))
+	values := make([]interface{}, len(fields))
+	for i, field := range fields {
+		keys[i] = field.Name()
+		values[i] = field.Value()
+	}
+	return keys, values
+}
+func SortFields(fields []Field) {
+	sort.Slice(fields, func(i, j int) bool {
+		// Left is smaller than right - ascending order.
+		return fields[i].Name() < fields[j].Name()
+	})
+}
+
+func MapFields(fields []Field, fn func(Field) string) []string {
+	SortFields(fields)
+	result := make([]string, len(fields))
+	for i, f := range fields {
+		result[i] = fn(f)
+	}
+	return result
+}
+
+func Equals(field string) string {
+	return fmt.Sprintf("%s = ?", field)
+}
+
+func Where(fields ...string) string {
+	result := MapString(fields, Equals)
+	sort.Strings(result)
+	return strings.Join(result, " AND ")
+}
+func Select(fields ...string) string {
+	sort.Strings(fields)
+	return strings.Join(fields, ", ")
+}
+func main() {
+	fields := []Field{NamedString("name", "john"), NamedInt64("age", 10)}
+	keys, values := Parse(fields...)
+	fmt.Println(keys, values)
+	placeholders := MapString(keys, func(string) string {
+		return "?"
+	})
+	fmt.Println(placeholders)
+
+	equals := MapString(keys, Equals)
+	fmt.Println(equals)
+	mappedKeys := MapFields(fields, func(f Field) string {
+		name := f.Name()
+		switch f.(type) {
+		case SqlString:
+			return fmt.Sprintf(`SET %s = COALESCE(NULLIF(NULLIF(?, %s), ""), %s)`, name, name, name)
+		case SqlInt64:
+			return fmt.Sprintf(`SET %s = COALESCE(NULLIF(NULLIF(?, %s), 0), %s)`, name, name, name)
+		default:
+			return ""
+		}
+	})
+	fmt.Println(mappedKeys)
+
+	result := Flatten(values, values)
+	fmt.Println(result)
+
+	fmt.Println(Where("name", "age", "car"))
+}
+```
