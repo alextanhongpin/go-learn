@@ -40,6 +40,7 @@ func main() {
 
 ## With Termination, Single State
 
+**NOTE**: This might be a little over-engineered, see the solution below:
 ```go
 package main
 
@@ -76,6 +77,67 @@ func main() {
 		Approved:  Published,
 		Published: Ended,
 		Ended:     Ended,
+	}
+	var completed bool
+	var initialState = Started
+	state := initialState
+
+	for i := 0; i < 5; i++ {
+		fmt.Printf("prev: %s", state)
+		state, completed = states.Next(state)
+		fmt.Printf(" next: %s, completed: %t\n", state, completed)
+		// Break to avoid infinite loop.
+		if completed {
+			break
+		}
+	}
+}
+```
+
+Simplified solution:
+
+```go
+package main
+
+import (
+	"fmt"
+	"strings"
+)
+
+type State string
+
+func (s State) String() string {
+	return string(s)
+}
+
+func (s State) Eq(in string) bool {
+	return strings.EqualFold(string(s), in)
+}
+
+func (s State) EqStrict(in string) bool {
+	return string(s) == in
+}
+
+type StateMachine map[State]State
+
+func (s StateMachine) Next(prev State) (State, bool) {
+	next, exist := s[prev]
+	return next, !exist
+}
+
+const (
+	Invalid   = State("invalid")
+	Started   = State("started")
+	Submitted = State("submitted")
+	Approved  = State("approved")
+	Published = State("published")
+)
+
+func main() {
+	var states = StateMachine{
+		Started:   Submitted,
+		Submitted: Approved,
+		Approved:  Published,
 	}
 	var completed bool
 	var initialState = Started
