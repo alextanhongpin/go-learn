@@ -1,3 +1,5 @@
+## Fast json query
+
 ```go
 package main
 
@@ -83,3 +85,20 @@ func main() {
 	r.Run()
 }
 ```
+
+# Key-value store
+
+- https://github.com/gomods/athens
+- https://github.com/syndtr/goleveldb
+- https://github.com/etcd-io/bbolt
+- https://github.com/dgraph-io/badger
+
+# Search
+
+- https://github.com/blevesearch/bleve
+
+# Cache
+
+- https://github.com/coocood/freecache
+- https://github.com/allegro/bigcache
+- https://github.com/patrickmn/go-cache
