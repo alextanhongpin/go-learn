@@ -1,7 +1,8 @@
 
 ## Zero time
 
-This program demonstrates how to handle zero time
+This program demonstrates how to handle zero time. When returning the time as JSON, use pointer to avoid zero time in JSON response.
+
 ```go
 package main
 
@@ -44,5 +45,45 @@ func main() {
 	secondsEastOfUTC := int((8 * time.Hour).Seconds())
 	singapore := time.FixedZone("Singapore Time", secondsEastOfUTC)
 	fmt.Println(time.Now(), time.Now().In(singapore).Format(time.RFC3339))
+}
+```
+
+
+## Timezone
+
+```go
+package main
+
+import (
+	"log"
+	"strings"
+	"time"
+)
+
+func main() {
+	{
+		t := time.Now()
+		zone, offset := t.Zone()
+		log.Println(zone, offset)
+	}
+	{
+		t := time.Now().In(time.Local)
+		zone, offset := t.Zone()
+		log.Printf("%+v, %+v\n", zone, offset)
+		log.Println(t.Location().String())
+	}
+	{
+		t, _ := time.Parse(time.RFC3339, "2019-04-09T11:34:20+08:00")
+		zone, offset := t.Zone()
+		log.Println(zone, offset)
+		log.Println(t.Location().String())
+	}
+	{
+		dateArray := strings.Fields(time.Now().String())
+		log.Println("date", dateArray[0])
+		log.Println("time", dateArray[1])
+		log.Println("offset", dateArray[2])
+		log.Println("timezone", dateArray[3])
+	}
 }
 ```
