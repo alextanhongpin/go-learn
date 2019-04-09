@@ -167,3 +167,70 @@ func main() {
 	}
 }
 ```
+
+## Cleanup logic
+
+```go
+package main
+
+import (
+	"fmt"
+)
+
+type Code uint
+
+func (c Code) Has(code Code) bool {
+	return c&code > 0
+}
+
+func (c Code) Is(code Code) bool {
+	return c == code
+}
+func (c Code) IsSet() bool {
+	return c > 0
+}
+
+const (
+	A Code = 1 << iota
+	B
+	C
+	D
+)
+
+func main() {
+	var code Code
+	codes := []Code{A, B, C, D}
+	for _, c := range codes {
+		fmt.Println(code&c == c)
+	}
+	fmt.Println("")
+	code |= A
+	for _, c := range codes {
+		fmt.Println(code.Has(c), code.Is(c))
+	}
+	fmt.Println("")
+	code |= B
+	for _, c := range codes {
+		fmt.Println(code.Has(c), code.Is(c))
+	}
+	fmt.Println("")
+
+	// Does code have A, B or C
+	fmt.Println("Does code have A, or B?", code.Has(A|B))
+	fmt.Println("Does code have D?", code.Has(D))
+	fmt.Println("Does code have B?", code.Has(B))
+	fmt.Println("Does code have C or D?", code.Has(C|D))
+	fmt.Println("Does code have A and B?", code.Is(A|B))
+	fmt.Println("Does code have A, B and C?", code.Is(A|B|C))
+	fmt.Println("code is", code)
+
+	// Unset A
+	code &= ^A
+	fmt.Println("code is", code)
+
+	// Unset B
+	code &= ^B
+	fmt.Println("code is", code)
+	fmt.Println("is the code set?", code.Has(A|B|C|D), code.IsSet())
+}
+```
