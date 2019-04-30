@@ -87,3 +87,23 @@ func main() {
 	}
 }
 ```
+
+## Start and end of the month
+
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func main() {
+	t := time.Now()
+	firstday := time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.Local)
+	lastday := firstday.AddDate(0, 1, 0).Add(time.Nanosecond * -1)
+	fmt.Println(t)
+	fmt.Println(firstday)
+	fmt.Println(lastday)
+}
+```
