@@ -100,11 +100,19 @@ func (i *IPLimiter) Stop() {
 
 ## Multi Ratelimiter
 
+
+This multi ratelimiter accepts multiple rate-limit rules, and if one of them is fulfilled, then an error RateExceededError (429) can be returned. The solutions attempt to store all the timestamp of the event for the given identifier (client ip/path combination), which can grow in size. To keep the memory usage low, we can:
+
+- stop adding event timestamps once it has exceeded the rate limit, and set an expire time in the future to indicate when the service will be available (the smallest timestamp plus the largest period of the rule)
+- clear it up at the interval of 1 * largest period. If the largest period is 1 hour, then it makes sense to retain the timestamps for at least 1 hour before clearing them up. In order to get the largest period, we sort the rules in ascending order and take the last rule's period. Then, for each map of client id events, we take the current time minus the largest period `t_exp`, loop through the events and find the first position of the slice array that has value greater than the `t_exp`. From there, we only take the slice index from that position. This is a more efficient way of filtering, since the timestamps are appended, they are already sorted in ascending order.
+
 ```go
 package main
 
 import (
+	"context"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 )
@@ -140,9 +148,67 @@ type RateLimiter struct {
 }
 
 func NewRateLimiter(rules []*Rule) *RateLimiter {
+	sort.Slice(rules, func(i, j int) bool {
+		return rules[i].Period < rules[j].Period
+	})
 	return &RateLimiter{
 		m:     make(map[string][]time.Time),
 		rules: rules,
+	}
+}
+
+func (r *RateLimiter) Clean() func(context.Context) {
+	var duration time.Duration
+	if len(r.rules) == 0 {
+		duration = time.Minute
+	} else {
+		duration = r.rules[len(r.rules)-1].Period
+	}
+	t := time.NewTicker(duration)
+	done := make(chan struct{}, 1)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer t.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-t.C:
+				r.Lock()
+				// Get the current time where all the counts will be invalid.
+				exp := time.Now().Add(-duration)
+				for id, evts := range r.m {
+					var pos int
+					for i, evt := range evts {
+						if evt.After(exp) {
+							pos = i
+							break
+						}
+					}
+					fmt.Println("clearing", pos, len(evts))
+					r.m[id] = evts[pos:]
+					fmt.Println("left", len(r.m[id]))
+				}
+				r.Unlock()
+			}
+		}
+	}()
+	return func(ctx context.Context) {
+		sig := make(chan struct{}, 1)
+		go func() {
+			close(done)
+			wg.Done()
+			close(sig)
+		}()
+		select {
+		case <-sig:
+			fmt.Println("graceful shutdown")
+			return
+		case <-ctx.Done():
+			return
+		}
 	}
 }
 
@@ -180,6 +246,8 @@ func main() {
 		NewRule(30, time.Hour, "30s call per hour"),
 	}
 	r := NewRateLimiter(rules)
+	shutdown := r.Clean()
+
 	id := "1"
 	r.Add(id)
 	fmt.Println(r.Allow(id))
@@ -202,5 +270,8 @@ func main() {
 	}
 	time.Sleep(1 * time.Second)
 	fmt.Println(r.Allow(id))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	shutdown(ctx)
 }
 ```
