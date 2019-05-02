@@ -96,3 +96,111 @@ func (i *IPLimiter) Stop() {
 	close(i.quit)
 }
 ```
+
+
+## Multi Ratelimiter
+
+```go
+package main
+
+import (
+	"fmt"
+	"sync"
+	"time"
+)
+
+type Rule struct {
+	Threshold int
+	Period    time.Duration
+	Name      string
+}
+
+func NewRule(threshold int, period time.Duration, name string) *Rule {
+	return &Rule{
+		Threshold: threshold,
+		Period:    period,
+		Name:      name,
+	}
+}
+
+func (r *Rule) IsThresholdExceeded(events []time.Time) bool {
+	var count int
+	for _, evt := range events {
+		if time.Since(evt) < r.Period {
+			count++
+		}
+	}
+	return count > r.Threshold
+}
+
+type RateLimiter struct {
+	sync.RWMutex
+	m     map[string][]time.Time
+	rules []*Rule
+}
+
+func NewRateLimiter(rules []*Rule) *RateLimiter {
+	return &RateLimiter{
+		m:     make(map[string][]time.Time),
+		rules: rules,
+	}
+}
+
+func (r *RateLimiter) Add(id string) {
+	r.Lock()
+	if _, exist := r.m[id]; !exist {
+		r.m[id] = make([]time.Time, 0)
+	}
+	r.m[id] = append(r.m[id], time.Now())
+	r.Unlock()
+}
+
+func (r *RateLimiter) Allow(id string) bool {
+	r.RLock()
+	events, exist := r.m[id]
+	r.RUnlock()
+	if !exist {
+		return true
+	}
+	for _, rule := range r.rules {
+		exceeded := rule.IsThresholdExceeded(events)
+		if exceeded {
+			fmt.Println(rule.Name)
+			return false
+		}
+	}
+	return true
+}
+
+func main() {
+	rules := []*Rule{
+		NewRule(1, time.Second, "1 call per second"),
+		// The rule for the longer duration is that it should made less calls than the shortest for the same period.
+		// The above rule limits up to 3600 calls per hour. But the bottom conditions allows only 30 per hour.
+		NewRule(30, time.Hour, "30s call per hour"),
+	}
+	r := NewRateLimiter(rules)
+	id := "1"
+	r.Add(id)
+	fmt.Println(r.Allow(id))
+	r.Add(id)
+	fmt.Println(r.Allow(id))
+
+	time.Sleep(1 * time.Second)
+	fmt.Println(r.Allow(id))
+
+	// Waste all quota.
+	for i := 0; i < 25; i++ {
+		r.Add(id)
+	}
+	// To bypass the 1 call per second limit.
+	time.Sleep(1 * time.Second)
+	fmt.Println(r.Allow(id))
+
+	for i := 0; i < 5; i++ {
+		r.Add(id)
+	}
+	time.Sleep(1 * time.Second)
+	fmt.Println(r.Allow(id))
+}
+```
