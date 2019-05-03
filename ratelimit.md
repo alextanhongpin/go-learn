@@ -486,3 +486,59 @@ func main() {
 	fmt.Println(fwc.Allow())
 }
 ```
+
+
+## Sliding Window Log
+```go
+package main
+
+import (
+	"fmt"
+	"log"
+	"time"
+)
+
+// round the unix time (seconds) to the nearest window.
+func modulo(now int64, window int) int64 {
+	return now - (now % int64(window))
+}
+
+type SlidingWindowLog struct {
+	maxRequestPerSec int
+	logs             []time.Time
+}
+
+func NewSlidingWindowLog(n int) *SlidingWindowLog {
+	return &SlidingWindowLog{
+		maxRequestPerSec: n,
+		logs:             make([]time.Time, 0),
+	}
+}
+
+func (s *SlidingWindowLog) Allow() bool {
+	curr := time.Now().Add(-1 * time.Second)
+	var pos int
+	for i, t := range s.logs {
+		pos = i
+		if t.After(curr) {
+			break
+		}
+	}
+	s.logs = s.logs[pos:]
+	s.logs = append(s.logs, time.Now())
+	log.Println(s.logs, pos)
+	return len(s.logs) <= s.maxRequestPerSec
+}
+
+func main() {
+	r := NewSlidingWindowLog(5)
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
+	time.Sleep(5 * time.Second)
+	fmt.Println(r.Allow())
+}
+```
