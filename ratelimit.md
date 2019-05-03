@@ -438,3 +438,51 @@ func main() {
 	fmt.Println("Hello, playground")
 }
 ```
+
+
+## Fixed Window Counter
+
+```go
+package main
+
+import (
+	"fmt"
+	"sync"
+	"time"
+)
+
+// round the unix time (seconds) to the nearest window.
+func modulo(now int64, window int) int64 {
+	return now - (now % int64(window))
+}
+
+type FixedWindowCounter struct {
+	maxRequestPerSec int
+	sync.RWMutex
+	m map[int64]int
+}
+
+func NewFixedWindowCounter(n int) *FixedWindowCounter {
+	return &FixedWindowCounter{
+		maxRequestPerSec: n,
+		m:                make(map[int64]int, 0),
+	}
+}
+
+func (f *FixedWindowCounter) Allow() bool {
+	f.Lock()
+	count := f.m[modulo(time.Now().Unix(), 1)]
+	f.m[modulo(time.Now().Unix(), 1)] = count + 1
+	f.Unlock()
+	return count < f.maxRequestPerSec
+}
+
+func main() {
+	// Round to the window of 1 second.
+	fwc := NewFixedWindowCounter(1)
+	fmt.Println(fwc.Allow())
+	fmt.Println(fwc.Allow())
+	time.Sleep(1 * time.Second)
+	fmt.Println(fwc.Allow())
+}
+```
