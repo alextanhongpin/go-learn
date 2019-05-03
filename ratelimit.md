@@ -217,6 +217,7 @@ func (r *RateLimiter) Add(id string) {
 	if _, exist := r.m[id]; !exist {
 		r.m[id] = make([]time.Time, 0)
 	}
+	// Before appending, we can remove those that expired first. This is done again by taking the largest period.
 	r.m[id] = append(r.m[id], time.Now())
 	r.Unlock()
 }
@@ -273,5 +274,167 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	shutdown(ctx)
+}
+```
+## Others
+
+Take a look at other ratelimiting implementation:
+
+- leaky bucket 
+- token bucket
+- fixed window counter
+- sliding window log
+- sliding window
+
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+type rateLimiter interface {
+	Allow() bool
+}
+
+type LeakyBucket struct {
+	maxRequestPerSec      int
+	requestIntervalMillis time.Duration
+	currentTime           time.Time
+}
+
+func NewLeakyBucket(n int) *LeakyBucket {
+	requestIntervalMillis := time.Duration(time.Second / time.Duration(n))
+	return &LeakyBucket{
+		maxRequestPerSec:      n,
+		requestIntervalMillis: requestIntervalMillis,
+		currentTime:           time.Now().Add(requestIntervalMillis),
+	}
+}
+
+func (l *LeakyBucket) Allow() bool {
+	if time.Now().Add(1 * time.Millisecond).After(l.currentTime) {
+		l.currentTime = time.Now().Add(l.requestIntervalMillis)
+		return true
+	}
+	return false
+}
+
+type TokenBucket struct {
+	// Add synchronization mechanism.
+	// sync.RWMutex
+	maxRequestPerSecond int
+	tokens              int // max request per second
+}
+
+func (t *TokenBucket) refill() {
+	tc := time.NewTicker(1 * time.Second)
+	for {
+		select {
+		case <-tc.C:
+			if t.tokens >= t.maxRequestPerSecond {
+				continue
+			}
+			t.tokens++
+		}
+	}
+}
+
+func (t *TokenBucket) Allow() bool {
+	if t.tokens == 0 {
+		return false
+	}
+	t.token--
+	return true
+}
+
+func main() {
+	lb := NewLeakyBucket(5)
+	fmt.Println(lb.Allow())
+	fmt.Println(lb.Allow())
+	fmt.Println(lb.Allow())
+	time.Sleep(1 * time.Second)
+	fmt.Println(lb.Allow())
+	fmt.Println(lb.Allow())
+}
+```
+
+## Multi-rate limiter 
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"sort"
+	"time"
+)
+
+type RateLimiter interface {
+	Wait(context.Context) error
+	Limit() rate.Limit
+}
+
+type multiLimiters struct {
+	limiters []RateLimiter
+}
+
+func (l *multiLimiters) Wait(ctx context.Context) error {
+	for _, l := range l.limiters {
+		if err := l.Wait(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (l *multiLimiter) Limit() rate.Limit {
+	return l.limiters[0].Limit()
+}
+
+func MultiLimiter(limiters ...RateLimiter) *multiLimiter {
+	byLimit := func(i, j int) bool {
+		return limiters[i].Limit() < limiters[j].Limit()
+	}
+	sort.Slice(limiters, byLimit)
+	return &multiLimiter{limiters: limiters}
+}
+
+func Per(eventCount int, duration time.Duration) rate.Limit {
+	return rate.Every(duration / time.Duration(eventCount))
+}
+
+type ApiConnection struct {
+	rateLimiter RateLimiter
+}
+
+func Open() *ApiConnection {
+	secondLimit := rate.NewLimiter(Per(2, time.Second), 1)   // Limit per second with no burstiness
+	minuteLimit := rate.NewLimiter(Per(10, time.Minute), 10) // Limit per second with burstiness of 10
+	&ApiConnection{
+		// 1 per second.
+		// rateLimiter: rate.NewLimiter(rate.Limit(1), 1),
+		rateLimiter: MultiLimiter(secondLimit, minuteLimit),
+	}
+}
+
+func (a *ApiConnection) ReadFile(ctx context.Context) error {
+	if err := a.rateLimiter.Wait(ctx); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (a *ApiConnection) ResolveAddress(ctx context.Context) error {
+	if err := a.rateLimiter.Wait(ctx); err != nil {
+		return err
+	}
+	return nil
+}
+
+func main() {
+	fmt.Println("Hello, playground")
 }
 ```
