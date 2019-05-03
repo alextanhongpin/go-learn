@@ -440,6 +440,10 @@ func main() {
 ```
 
 
+# Different Algorithms
+
+NOTE: The implementations below are not production ready - they are not concurrent safe (no mutex/channel applied), not distributed (only works on local machine, should create an interface that calls redis/datastore instead) and could have been written in a better way. 
+
 ## Fixed Window Counter
 
 ```go
@@ -545,6 +549,8 @@ func main() {
 
 ## Sliding Window
 
+NOTE: This is an unoptimized version. We can skip storing the timestamp of the events and instead store just the count.
+
 ```go
 package main
 
@@ -586,6 +592,72 @@ func (s *SlidingWindowLog) Allow() bool {
 
 	total := int64(len(logsPrev))*(int64(1)-(now.Unix()-curr)) + int64(len(logsNow))
 	s.logs[curr] = append(s.logs[curr], time.Now())
+	fmt.Println(s.logs)
+	return total <= int64(s.maxRequestPerSec)
+}
+
+func main() {
+	r := NewSlidingWindowLog(5)
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
+	time.Sleep(1 * time.Second)
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
+	time.Sleep(5 * time.Second)
+	fmt.Println(r.Allow())
+	time.Sleep(5 * time.Second)
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
+}
+```
+
+## Improved sliding window
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+// round the unix time (seconds) to the nearest window.
+func modulo(now int64, window int) int64 {
+	return now - (now % int64(window))
+}
+
+type SlidingWindowLog struct {
+	maxRequestPerSec int
+	logs             map[int64]int
+}
+
+func NewSlidingWindowLog(n int) *SlidingWindowLog {
+	return &SlidingWindowLog{
+		maxRequestPerSec: n,
+		logs:             make(map[int64]int, 0),
+	}
+}
+
+func (s *SlidingWindowLog) Allow() bool {
+	now := time.Now()
+	curr := modulo(now.Unix(), 1)
+	prev := modulo(now.Add(-1*time.Second).Unix(), 1)
+	prevprev := modulo(now.Add(-2*time.Second).Unix(), 1)
+	for k := range s.logs {
+		if k <= prevprev {
+			delete(s.logs, k)
+		}
+	}
+
+	logsNow := s.logs[curr]
+	logsPrev := s.logs[prev]
+
+	total := int64(logsPrev)*(int64(1)-(now.Unix()-curr)) + int64(logsNow)
+	s.logs[curr]++
 	fmt.Println(s.logs)
 	return total <= int64(s.maxRequestPerSec)
 }
