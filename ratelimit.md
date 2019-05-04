@@ -333,54 +333,95 @@ func main() {
 ```
 
 ## Token Bucket
+
 ```go
 package main
 
 import (
+	"context"
 	"fmt"
+	"sync"
 	"time"
 )
 
-type rateLimiter interface {
-	Allow() bool
-}
-
 type TokenBucket struct {
-	// Add synchronization mechanism.
-	// sync.RWMutex
-	maxRequestPerSecond int
-	tokens              int // max request per second
+	requestsPerSecond int64
+	sync.RWMutex
+	counter int64
 }
 
-func (t *TokenBucket) refill() {
-	tc := time.NewTicker(1 * time.Second)
-	for {
-		select {
-		case <-tc.C:
-			if t.tokens >= t.maxRequestPerSecond {
-				continue
-			}
-			t.tokens++
-		}
+func NewRateLimiter(requestsPerSecond int64) *TokenBucket {
+	return &TokenBucket{
+		requestsPerSecond: requestsPerSecond,
+		counter:           requestsPerSecond,
 	}
 }
 
 func (t *TokenBucket) Allow() bool {
-	if t.tokens == 0 {
+	t.RLock()
+	counter := t.counter
+	t.RUnlock()
+	if counter <= 0 {
 		return false
 	}
-	t.token--
-	return true
+	t.Lock()
+	t.counter--
+	t.Unlock()
+	return t.counter < t.requestsPerSecond
+}
+
+func (t *TokenBucket) Start() func(context.Context) {
+	ticker := time.NewTicker(time.Second / time.Duration(t.requestsPerSecond))
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	done := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				t.Lock()
+				t.counter++
+				t.Unlock()
+				return
+			}
+		}
+	}()
+	return func(ctx context.Context) {
+		sig := make(chan struct{})
+		go func() {
+			close(done)
+			wg.Wait()
+			close(sig)
+		}()
+		select {
+		case <-ctx.Done():
+			return
+		case <-sig:
+			return
+		}
+	}
 }
 
 func main() {
+	r := NewRateLimiter(5)
+	shutdown := r.Start()
 
-	fmt.Println(lb.Allow())
-	fmt.Println(lb.Allow())
-	fmt.Println(lb.Allow())
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
 	time.Sleep(1 * time.Second)
-	fmt.Println(lb.Allow())
-	fmt.Println(lb.Allow())
+	fmt.Println(r.Allow())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	shutdown(ctx)
 }
 ```
 
