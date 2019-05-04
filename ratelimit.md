@@ -361,7 +361,7 @@ func (t *TokenBucket) Allow() bool {
 	t.RLock()
 	counter := t.counter
 	t.RUnlock()
-	if counter <= 0 {
+	if counter == 0 {
 		return false
 	}
 	t.Lock()
@@ -382,6 +382,12 @@ func (t *TokenBucket) Start() func(context.Context) {
 			case <-done:
 				return
 			case <-ticker.C:
+				t.RLock()
+				counter := t.counter
+				if counter == t.requestsPerSecond {
+					return
+				}
+				t.RUnlock()
 				t.Lock()
 				t.counter++
 				t.Unlock()
@@ -423,6 +429,7 @@ func main() {
 	defer cancel()
 	shutdown(ctx)
 }
+
 ```
 
 ## Multi-rate limiter 
