@@ -286,6 +286,53 @@ Take a look at other ratelimiting implementation:
 - sliding window log
 - sliding window
 
+## Leaky Bucket
+
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+type LeakyBucket struct {
+	requestsPerSecond int64
+	nextAllowedTime   time.Time
+	interval          time.Duration
+}
+
+func NewRateLimiter(requestsPerSecond int64) *LeakyBucket {
+	return &LeakyBucket{
+		requestsPerSecond: requestsPerSecond,
+		interval:          time.Second / time.Duration(requestsPerSecond),
+	}
+}
+
+func (l *LeakyBucket) Allow() bool {
+	now := time.Now()
+	if now.Equal(l.nextAllowedTime) || now.After(l.nextAllowedTime) {
+		l.nextAllowedTime = time.Now().Add(l.interval)
+		return true
+	}
+	return false
+}
+
+func main() {
+	r := NewRateLimiter(5)
+	fmt.Println(r.Allow())
+	time.Sleep(300 * time.Millisecond)
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
+	time.Sleep(300 * time.Millisecond)
+	fmt.Println(r.Allow())
+}
+```
+
+## Token Bucket
 ```go
 package main
 
@@ -296,29 +343,6 @@ import (
 
 type rateLimiter interface {
 	Allow() bool
-}
-
-type LeakyBucket struct {
-	maxRequestPerSec      int
-	requestIntervalMillis time.Duration
-	currentTime           time.Time
-}
-
-func NewLeakyBucket(n int) *LeakyBucket {
-	requestIntervalMillis := time.Duration(time.Second / time.Duration(n))
-	return &LeakyBucket{
-		maxRequestPerSec:      n,
-		requestIntervalMillis: requestIntervalMillis,
-		currentTime:           time.Now().Add(requestIntervalMillis),
-	}
-}
-
-func (l *LeakyBucket) Allow() bool {
-	if time.Now().Add(1 * time.Millisecond).After(l.currentTime) {
-		l.currentTime = time.Now().Add(l.requestIntervalMillis)
-		return true
-	}
-	return false
 }
 
 type TokenBucket struct {
@@ -350,7 +374,7 @@ func (t *TokenBucket) Allow() bool {
 }
 
 func main() {
-	lb := NewLeakyBucket(5)
+
 	fmt.Println(lb.Allow())
 	fmt.Println(lb.Allow())
 	fmt.Println(lb.Allow())
@@ -467,7 +491,6 @@ import (
 	"time"
 )
 
-
 func moduloTime(ts, window int64) int64 {
 	return ts - (ts % window)
 }
@@ -489,15 +512,10 @@ func (f *FixedWindowCounter) getTimeWindow() int64 {
 	return moduloTime(time.Now().Unix(), f.requestsPerSecond)
 }
 
-func (f *FixedWindowCounter) Add() {
-	f.Lock()
-	f.counter[f.getTimeWindow()] += 1
-	f.Unlock()
-}
-
 func (f *FixedWindowCounter) Allow() bool {
 	f.RLock()
 	count := f.counter[f.getTimeWindow()]
+	f.counter[f.getTimeWindow()] += 1
 	f.RUnlock()
 	return count < f.requestsPerSecond
 }
@@ -505,12 +523,10 @@ func (f *FixedWindowCounter) Allow() bool {
 func main() {
 	r := NewRateLimiter(5)
 	fmt.Println(r.Allow())
-	r.Add()
-	r.Add()
-	r.Add()
-	r.Add()
 	fmt.Println(r.Allow())
-	r.Add()
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
 	fmt.Println(r.Allow())
 }
 ```
