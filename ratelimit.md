@@ -446,6 +446,18 @@ NOTE: The implementations below are not production ready - they are not concurre
 
 ## Fixed Window Counter
 
+For every time window, keep a counter and increment them everytime they are called.
+
+Given a period of 5 seconds,
+when the time is `<time>`
+then the time window should be `<time window>`
+
+- time: 00:03, time window: 00:00, counter: 1
+- time: 00:05, time window: 00:05, counter: 1
+- time: 00:06, time window: 00:05, counter: 2
+- time: 00:07, time window: 00:05, counter: 3
+- time: 00:11, time window: 00:10, counter: 1
+
 ```go
 package main
 
@@ -455,39 +467,51 @@ import (
 	"time"
 )
 
-// round the unix time (seconds) to the nearest window.
-func modulo(now int64, window int) int64 {
-	return now - (now % int64(window))
+
+func moduloTime(ts, window int64) int64 {
+	return ts - (ts % window)
 }
 
 type FixedWindowCounter struct {
-	maxRequestPerSec int
+	requestsPerSecond int64
 	sync.RWMutex
-	m map[int64]int
+	counter map[int64]int64
 }
 
-func NewFixedWindowCounter(n int) *FixedWindowCounter {
+func NewRateLimiter(n int64) *FixedWindowCounter {
 	return &FixedWindowCounter{
-		maxRequestPerSec: n,
-		m:                make(map[int64]int, 0),
+		requestsPerSecond: n,
+		counter:           make(map[int64]int64),
 	}
 }
 
-func (f *FixedWindowCounter) Allow() bool {
+func (f *FixedWindowCounter) getTimeWindow() int64 {
+	return moduloTime(time.Now().Unix(), f.requestsPerSecond)
+}
+
+func (f *FixedWindowCounter) Add() {
 	f.Lock()
-	count := f.m[modulo(time.Now().Unix(), 1)]
-	f.m[modulo(time.Now().Unix(), 1)] = count + 1
+	f.counter[f.getTimeWindow()] += 1
 	f.Unlock()
-	return count < f.maxRequestPerSec
+}
+
+func (f *FixedWindowCounter) Allow() bool {
+	f.RLock()
+	count := f.counter[f.getTimeWindow()]
+	f.RUnlock()
+	return count < f.requestsPerSecond
 }
 
 func main() {
-	// Round to the window of 1 second.
-	fwc := NewFixedWindowCounter(1)
-	fmt.Println(fwc.Allow())
-	fmt.Println(fwc.Allow())
-	time.Sleep(1 * time.Second)
-	fmt.Println(fwc.Allow())
+	r := NewRateLimiter(5)
+	fmt.Println(r.Allow())
+	r.Add()
+	r.Add()
+	r.Add()
+	r.Add()
+	fmt.Println(r.Allow())
+	r.Add()
+	fmt.Println(r.Allow())
 }
 ```
 
@@ -681,3 +705,7 @@ func main() {
 	fmt.Println(r.Allow())
 }
 ```
+
+## References
+
+- https://blog.cloudflare.com/counting-things-a-lot-of-different-things/
