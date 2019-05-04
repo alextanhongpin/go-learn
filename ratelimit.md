@@ -658,53 +658,52 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"sync"
 	"time"
 )
 
-// round the unix time (seconds) to the nearest window.
-func modulo(now int64, window int) int64 {
-	return now - (now % int64(window))
-}
-
 type SlidingWindowLog struct {
-	maxRequestPerSec int
-	logs             []time.Time
+	requestsPerSecond int64
+	sync.RWMutex
+	events []time.Time
 }
 
-func NewSlidingWindowLog(n int) *SlidingWindowLog {
+func NewRateLimiter(requestsPerSecond int64) *SlidingWindowLog {
 	return &SlidingWindowLog{
-		maxRequestPerSec: n,
-		logs:             make([]time.Time, 0),
+		requestsPerSecond: requestsPerSecond,
+		events:            make([]time.Time, 0),
 	}
 }
 
 func (s *SlidingWindowLog) Allow() bool {
-	curr := time.Now().Add(-1 * time.Second)
+	s.Lock()
+	now := time.Now().Add(-1 * time.Second)
 	var pos int
-	for i, t := range s.logs {
+	for i, evt := range s.events {
 		pos = i
-		if t.After(curr) {
+		if evt.After(now) {
 			break
 		}
 	}
-	s.logs = s.logs[pos:]
-	s.logs = append(s.logs, time.Now())
-	log.Println(s.logs, pos)
-	return len(s.logs) <= s.maxRequestPerSec
+	s.events = s.events[pos:]
+	s.events = append(s.events, time.Now())
+	counter := int64(len(s.events))
+	s.Unlock()
+	return counter < s.requestsPerSecond
 }
 
 func main() {
-	r := NewSlidingWindowLog(5)
+	r := NewRateLimiter(5)
+
 	fmt.Println(r.Allow())
 	fmt.Println(r.Allow())
 	fmt.Println(r.Allow())
 	fmt.Println(r.Allow())
 	fmt.Println(r.Allow())
-	fmt.Println(r.Allow())
-	time.Sleep(5 * time.Second)
+	time.Sleep(1 * time.Second)
 	fmt.Println(r.Allow())
 }
+
 ```
 
 ## Sliding Window
