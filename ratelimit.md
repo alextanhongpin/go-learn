@@ -708,139 +708,62 @@ func main() {
 
 ## Sliding Window
 
-NOTE: This is an unoptimized version. We can skip storing the timestamp of the events and instead store just the count.
-
 ```go
 package main
 
 import (
 	"fmt"
+	"sync"
 	"time"
 )
 
-// round the unix time (seconds) to the nearest window.
-func modulo(now int64, window int) int64 {
-	return now - (now % int64(window))
+type SlidingWindow struct {
+	requestsPerSecond int64
+	sync.RWMutex
+	events map[int64]int64
 }
 
-type SlidingWindowLog struct {
-	maxRequestPerSec int
-	logs             map[int64][]time.Time
-}
-
-func NewSlidingWindowLog(n int) *SlidingWindowLog {
-	return &SlidingWindowLog{
-		maxRequestPerSec: n,
-		logs:             make(map[int64][]time.Time, 0),
+func NewRateLimiter(requestsPerSecond int64) *SlidingWindow {
+	return &SlidingWindow{
+		requestsPerSecond: requestsPerSecond,
+		events:            make(map[int64]int64),
 	}
 }
 
-func (s *SlidingWindowLog) Allow() bool {
+func (s *SlidingWindow) Allow() bool {
 	now := time.Now()
-	curr := modulo(now.Unix(), 1)
-	prev := modulo(now.Add(-1*time.Second).Unix(), 1)
-	prevprev := modulo(now.Add(-2*time.Second).Unix(), 1)
-	for k := range s.logs {
-		if k <= prevprev {
-			delete(s.logs, k)
-		}
+	curr := now.Unix()
+	prev := curr - 1
+
+	s.Lock()
+	prevCount := s.events[prev]
+	s.events[curr]++
+	currCount := s.events[curr]
+	s.Unlock()
+
+	if prevCount == 0 {
+		return currCount < s.requestsPerSecond
 	}
-
-	logsNow := s.logs[curr]
-	logsPrev := s.logs[prev]
-
-	total := int64(len(logsPrev))*(int64(1)-(now.Unix()-curr)) + int64(len(logsNow))
-	s.logs[curr] = append(s.logs[curr], time.Now())
-	fmt.Println(s.logs)
-	return total <= int64(s.maxRequestPerSec)
+	delta := 1 - (float64(now.UnixNano()-(now.Unix()*1e9)) / 1e9)
+	counter := int64(float64(prevCount)*delta + float64(currCount))
+	return counter < s.requestsPerSecond
 }
 
 func main() {
-	r := NewSlidingWindowLog(5)
-	fmt.Println(r.Allow())
-	fmt.Println(r.Allow())
-	fmt.Println(r.Allow())
-	fmt.Println(r.Allow())
-	fmt.Println(r.Allow())
-	fmt.Println(r.Allow())
-	time.Sleep(1 * time.Second)
-	fmt.Println(r.Allow())
-	fmt.Println(r.Allow())
-	fmt.Println(r.Allow())
-	time.Sleep(5 * time.Second)
-	fmt.Println(r.Allow())
-	time.Sleep(5 * time.Second)
-	fmt.Println(r.Allow())
-	fmt.Println(r.Allow())
-}
-```
-
-## Improved sliding window
-```go
-package main
-
-import (
-	"fmt"
-	"time"
-)
-
-// round the unix time (seconds) to the nearest window.
-func modulo(now int64, window int) int64 {
-	return now - (now % int64(window))
-}
-
-type SlidingWindowLog struct {
-	maxRequestPerSec int
-	logs             map[int64]int
-}
-
-func NewSlidingWindowLog(n int) *SlidingWindowLog {
-	return &SlidingWindowLog{
-		maxRequestPerSec: n,
-		logs:             make(map[int64]int, 0),
-	}
-}
-
-func (s *SlidingWindowLog) Allow() bool {
-	now := time.Now()
-	curr := modulo(now.Unix(), 1)
-	prev := modulo(now.Add(-1*time.Second).Unix(), 1)
-	prevprev := modulo(now.Add(-2*time.Second).Unix(), 1)
-	for k := range s.logs {
-		if k <= prevprev {
-			delete(s.logs, k)
-		}
-	}
-
-	logsNow := s.logs[curr]
-	logsPrev := s.logs[prev]
-
-	total := int64(logsPrev)*(int64(1)-(now.Unix()-curr)) + int64(logsNow)
-	s.logs[curr]++
-	fmt.Println(s.logs)
-	return total <= int64(s.maxRequestPerSec)
-}
-
-func main() {
-	r := NewSlidingWindowLog(5)
-	fmt.Println(r.Allow())
-	fmt.Println(r.Allow())
-	fmt.Println(r.Allow())
-	fmt.Println(r.Allow())
-	fmt.Println(r.Allow())
-	fmt.Println(r.Allow())
-	time.Sleep(1 * time.Second)
-	fmt.Println(r.Allow())
-	fmt.Println(r.Allow())
-	fmt.Println(r.Allow())
-	time.Sleep(5 * time.Second)
-	fmt.Println(r.Allow())
-	time.Sleep(5 * time.Second)
-	fmt.Println(r.Allow())
-	fmt.Println(r.Allow())
+	rl := NewRateLimiter(5)
+	fmt.Println(rl.Allow())
+	fmt.Println(rl.Allow())
+	fmt.Println(rl.Allow())
+	fmt.Println(rl.Allow())
+	fmt.Println(rl.Allow())
+	fmt.Println(rl.Allow())
+	time.Sleep(3 * time.Second)
+	fmt.Println(rl.Allow())
 }
 ```
 
 ## References
 
 - https://blog.cloudflare.com/counting-things-a-lot-of-different-things/
+- https://medium.com/@saisandeepmopuri/system-design-rate-limiter-and-data-modelling-9304b0d18250
+- https://hechao.li/2018/06/25/Rate-Limiter-Part1/
