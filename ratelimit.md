@@ -371,6 +371,7 @@ func (t *TokenBucket) Allow() bool {
 }
 
 func (t *TokenBucket) Start() func(context.Context) {
+	// Note: We can just refill with with the requestsPerSecond every second.
 	ticker := time.NewTicker(time.Second / time.Duration(t.requestsPerSecond))
 	var wg sync.WaitGroup
 
@@ -429,7 +430,78 @@ func main() {
 	defer cancel()
 	shutdown(ctx)
 }
+```
 
+Optimized token bucket with lazy refill:
+
+```go
+package main
+
+import (
+	"fmt"
+	"sync"
+	"time"
+)
+
+type TokenBucket struct {
+	requestsPerSecond int64
+	sync.RWMutex
+	counter        int64
+	lastRefillTime time.Time
+}
+
+func NewRateLimiter(requestsPerSecond int64) *TokenBucket {
+	return &TokenBucket{
+		requestsPerSecond: requestsPerSecond,
+		counter:           requestsPerSecond,
+	}
+}
+
+func (t *TokenBucket) Allow() bool {
+	t.lazyRefill()
+	t.RLock()
+	counter := t.counter
+	t.RUnlock()
+	if counter == 0 {
+		return false
+	}
+	t.Lock()
+	t.counter--
+	t.Unlock()
+	return t.counter < t.requestsPerSecond
+}
+
+func (t *TokenBucket) lazyRefill() {
+	elapsedSeconds := time.Now().Sub(t.lastRefillTime).Seconds()
+	c := int64(elapsedSeconds) * t.requestsPerSecond
+	if c > 0 {
+		t.Lock()
+		t.counter = min(t.counter+c, t.requestsPerSecond)
+		t.Unlock()
+		t.lastRefillTime = time.Now()
+	}
+}
+
+func min(a, b int64) int64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func main() {
+	r := NewRateLimiter(5)
+
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
+	fmt.Println(r.Allow())
+	time.Sleep(1 * time.Second)
+	fmt.Println(r.Allow())
+}
 ```
 
 ## Multi-rate limiter 
