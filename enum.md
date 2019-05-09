@@ -41,7 +41,7 @@ func main() {
 
 ## Bitwise Operation
 
-```
+```go
 package main
 
 import (
@@ -71,5 +71,60 @@ func main() {
 	fmt.Println(c.Is(A), c.Is(B), c.Is(C), c.Is(D))
 	fmt.Println(c.Has(A), c.Has(B), c.Has(C), c.Has(D))
 	fmt.Println(A.Is(c), B.Is(c), C.Is(c), D.Is(c))
+}
+```
+
+
+## Enumerable with Comparable
+
+```go
+package main
+
+import (
+	"fmt"
+)
+
+type Enumerable int
+
+const (
+	Less    Enumerable = -1
+	Equal   Enumerable = 0
+	Greater Enumerable = 1
+)
+
+type Tier string
+
+var TierEnumerable = map[Tier]int{
+	Bronze: 1,
+	Silver: 2,
+	Gold:   4,
+}
+
+const (
+	Bronze Tier = "bronze"
+	Silver Tier = "silver"
+	Gold   Tier = "gold"
+)
+
+func (t Tier) Cmp(tt Tier) Enumerable {
+	l, r := TierEnumerable[t], TierEnumerable[tt]
+	if l > r {
+		return Greater
+	}
+	if l < r {
+		return Less
+	}
+	return Equal
+}
+
+func main() {
+	switch Gold.Cmp(Silver) {
+	case Less:
+		fmt.Println("is less")
+	case Equal:
+		fmt.Println("is equal")
+	case Greater:
+		fmt.Println("is greater")
+	}
 }
 ```
