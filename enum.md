@@ -77,6 +77,10 @@ func main() {
 
 ## Enumerable with Comparable
 
+
+
+Comparable strings enums in golang. Use case is to check for statuses, or if Tuesday is greater than Monday. For statuses (state machine), we want to know if the next transition is allowable by comparing if the next state is larger than the previous ones (this is assuming that the next state is always greater than the previous one and the state only goes in one direction). Other examples includes tier pricing, we want to know if a plan is upgradable or downgradable by checking the enum type of each tier plan. In order for the products to be upgraded or downgraded, the tier values should not be the same.
+
 ```go
 package main
 
