@@ -736,9 +736,15 @@ func (s *SlidingWindow) Allow() bool {
 	prev := curr - 1
 
 	s.Lock()
+	for ts := range s.events {
+		if ts < prev {
+			delete(s.events, ts)
+		}
+	}
 	prevCount := s.events[prev]
 	s.events[curr]++
 	currCount := s.events[curr]
+	fmt.Println(s.events)
 	s.Unlock()
 
 	if prevCount == 0 {
@@ -756,6 +762,8 @@ func main() {
 	fmt.Println(rl.Allow())
 	fmt.Println(rl.Allow())
 	fmt.Println(rl.Allow())
+	fmt.Println(rl.Allow())
+	time.Sleep(1 * time.Second)
 	fmt.Println(rl.Allow())
 	time.Sleep(3 * time.Second)
 	fmt.Println(rl.Allow())
