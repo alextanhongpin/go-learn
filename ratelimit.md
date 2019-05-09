@@ -934,6 +934,175 @@ func main() {
 	fmt.Println("shutting down")
 }
 ```
+
+## Rate Limit Manager, Standalone shutdown
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"sync"
+	"time"
+)
+
+type SlidingWindow struct {
+	requestsPerSecond int64
+	sync.RWMutex
+	events map[int64]int64
+}
+
+type RateLimiter interface {
+	Allow() bool
+}
+
+func NewRateLimiter(requestsPerSecond int64) *SlidingWindow {
+	return &SlidingWindow{
+		requestsPerSecond: requestsPerSecond,
+		events:            make(map[int64]int64),
+	}
+}
+
+func (s *SlidingWindow) Allow() bool {
+	now := time.Now()
+	curr := now.Unix()
+	prev := curr - 1
+
+	s.Lock()
+	for ts := range s.events {
+		if ts < prev {
+			delete(s.events, ts)
+		}
+	}
+	prevCount := s.events[prev]
+	s.events[curr]++
+	currCount := s.events[curr]
+	fmt.Println(s.events)
+	s.Unlock()
+
+	if prevCount == 0 {
+		return currCount < s.requestsPerSecond
+	}
+	delta := 1 - (float64(now.UnixNano()-(now.Unix()*1e9)) / 1e9)
+	counter := int64(float64(prevCount)*delta + float64(currCount))
+	return counter < s.requestsPerSecond
+}
+
+type ClientRateLimiter struct {
+	limiter        RateLimiter
+	lastActiveTime time.Time
+}
+
+func NewClientRateLimiter(requestsPerSecond int64) *ClientRateLimiter {
+	return &ClientRateLimiter{
+		limiter:        NewRateLimiter(requestsPerSecond),
+		lastActiveTime: time.Now(),
+	}
+}
+func (c *ClientRateLimiter) Elapsed(duration time.Duration) bool {
+	fmt.Println(time.Since(c.lastActiveTime))
+	return time.Since(c.lastActiveTime) > duration
+}
+func (c *ClientRateLimiter) Allow() bool {
+	return c.limiter.Allow()
+}
+
+type RateLimitManager struct {
+	requestsPerSecond int64
+	wg                sync.WaitGroup
+	sync.RWMutex
+	m    map[string]*ClientRateLimiter
+	quit chan struct{}
+}
+
+func NewRateLimitManager(requestsPerSecond int64) *RateLimitManager {
+	mgr := &RateLimitManager{
+		requestsPerSecond: requestsPerSecond,
+		m:                 make(map[string]*ClientRateLimiter),
+		quit:              make(chan struct{}),
+	}
+	mgr.start()
+	return mgr
+}
+
+func (r *RateLimitManager) Allow(clientID string) bool {
+	r.Lock()
+	limiter, exist := r.m[clientID]
+	if !exist {
+		r.m[clientID] = NewClientRateLimiter(r.requestsPerSecond)
+		limiter = r.m[clientID]
+	}
+	limiter.lastActiveTime = time.Now()
+	r.Unlock()
+	return limiter.Allow()
+}
+
+func (r *RateLimitManager) start() {
+	duration := time.Duration(r.requestsPerSecond*2) * time.Second
+	t := time.NewTicker(duration)
+
+	r.wg.Add(1)
+	go func() {
+		defer r.wg.Done()
+		for {
+			select {
+			case <-r.quit:
+				fmt.Println("graceful shutdown")
+				return
+			case <-t.C:
+				r.Lock()
+				for id, client := range r.m {
+					fmt.Println("clearing")
+					if client.Elapsed(duration) {
+						fmt.Println("clearing", id)
+						delete(r.m, id)
+					}
+				}
+				r.Unlock()
+			}
+		}
+	}()
+}
+
+func (r *RateLimitManager) Clear() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	signal := make(chan struct{})
+	go func() {
+		close(r.quit)
+		fmt.Println("closing done")
+		r.wg.Wait()
+		close(signal)
+	}()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-signal:
+		fmt.Println("signal received")
+		return nil
+	}
+}
+
+func main() {
+	rl := NewRateLimitManager(5)
+	defer rl.Clear()
+	ip := "0.0.0.0"
+	fmt.Println(rl.Allow(ip))
+	fmt.Println(rl.Allow(ip))
+	fmt.Println(rl.Allow(ip))
+	fmt.Println(rl.Allow(ip))
+	fmt.Println(rl.Allow(ip))
+	fmt.Println(rl.Allow(ip))
+	time.Sleep(1 * time.Second)
+	fmt.Println(rl.Allow(ip))
+	fmt.Println("sleep 15s")
+	time.Sleep(20 * time.Second)
+	fmt.Println(rl.Allow(ip))
+
+	fmt.Println("shutting down")
+}
+```
 ## References
 
 - https://blog.cloudflare.com/counting-things-a-lot-of-different-things/
