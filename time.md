@@ -161,3 +161,126 @@ func main() {
 	fmt.Println(string(b))
 }
 ```
+
+## With MarshalJSON
+```
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"time"
+)
+
+type DateJSON struct {
+	time.Time
+}
+
+func (d DateJSON) MarshalJSON() ([]byte, error) {
+	if d.IsZero() {
+		return []byte("null"), nil
+	}
+	return d.Time.MarshalJSON()
+}
+
+type BirthDate struct {
+	time.Time
+}
+
+func (b BirthDate) MarshalJSON() ([]byte, error) {
+	if b.IsZero() {
+		return []byte("null"), nil
+	}
+	return b.Time.MarshalJSON()
+}
+
+func (b BirthDate) Age(now time.Time) int {
+	year, month, date, _, _, _ := diff(b.Time, now)
+	// More than half a month is considered a month.
+	if date > 15 {
+		month++
+	}
+	// More than half a year is one year.
+	if month > 6 {
+		year++
+	}
+	return year
+}
+
+type User struct {
+	Name      string    `json:"name"`
+	CreatedAt DateJSON  `json:"created_at,omitempty"`
+	BirthDate BirthDate `json:"birth_date,omitempty"`
+}
+
+func main() {
+	// From JSON.
+	{
+		js := `{"name":"john","created_at":"2009-11-10T23:00:00Z", "birth_date": "1990-01-01T00:00:00Z"}`
+		var u User
+		err := json.Unmarshal([]byte(js), &u)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(u.CreatedAt)
+		fmt.Println(u.BirthDate, u.BirthDate.Age(time.Date(2019, 5, 13, 0, 0, 0, 0, time.Local)))
+	}
+	// To JSON
+	{
+		user := &User{
+			Name:      "john",
+			CreatedAt: DateJSON{time.Now()},
+		}
+		b, _ := json.Marshal(user)
+		fmt.Println(string(b))
+	}
+}
+
+func diff(a, b time.Time) (year, month, day, hour, min, sec int) {
+	if a.Location() != b.Location() {
+		b = b.In(a.Location())
+	}
+	if a.After(b) {
+		a, b = b, a
+	}
+	y1, M1, d1 := a.Date()
+	y2, M2, d2 := b.Date()
+
+	h1, m1, s1 := a.Clock()
+	h2, m2, s2 := b.Clock()
+
+	year = int(y2 - y1)
+	month = int(M2 - M1)
+	day = int(d2 - d1)
+	hour = int(h2 - h1)
+	min = int(m2 - m1)
+	sec = int(s2 - s1)
+
+	// Normalize negative values
+	if sec < 0 {
+		sec += 60
+		min--
+	}
+	if min < 0 {
+		min += 60
+		hour--
+	}
+	if hour < 0 {
+		hour += 24
+		day--
+	}
+	if day < 0 {
+		// days in month:
+		t := time.Date(y1, M1, 32, 0, 0, 0, 0, time.UTC)
+		day += 32 - t.Day()
+		month--
+	}
+	if month < 0 {
+		month += 12
+		year--
+	}
+
+	return
+}
+```
