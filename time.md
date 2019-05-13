@@ -116,3 +116,48 @@ func startOfDay(t time.Time) time.Time {
 	return time.Date(year, month, day, 0, 0, 0, 0, t.Location())
 }
 ```
+
+## Removing JSON Date
+
+```go
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"time"
+)
+
+type DateOfBirth time.Time
+
+func NewDateOfBirth(year, month, day int) DateOfBirth {
+	return DateOfBirth(time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.Local))
+}
+
+func (d DateOfBirth) IsValid() bool {
+	return !time.Time(d).Equal(time.Date(9999, 12, 31, 0, 0, 0, 0, time.Local)) && !time.Time(d).IsZero()
+}
+func (d DateOfBirth) Date() time.Time {
+	return time.Time(d)
+}
+
+type User struct {
+	Name            string      `json:"name"`
+	DateOfBirth     DateOfBirth `json:"-"`
+	DateOfBirthJSON *time.Time  `json:"date_of_birth,omitempty"`
+}
+
+func main() {
+	u := &User{
+		Name: "john",
+		// DateOfBirth: NewDateOfBirth(1990, 1, 1),
+	}
+	if u.DateOfBirth.IsValid() {
+		var date = u.DateOfBirth.Date()
+		fmt.Println(date)
+		u.DateOfBirthJSON = &date
+	}
+	b, _ := json.Marshal(u)
+	fmt.Println(string(b))
+}
+```
