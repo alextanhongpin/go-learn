@@ -35,6 +35,14 @@ func NewSequence(sequences Sequences) *Sequence {
 	return &Sequence{sequences: sequences}
 }
 
+func (s *Sequence) Completed() bool {
+	var state byte
+	for _, seq := range s.sequences {
+		state |= (1 << seq)
+	}
+	return state == s.state
+}
+
 func (s *Sequence) Set(nextState uint) bool {
 	curr := s.state
 	// The expected state up till now.
@@ -64,5 +72,10 @@ func main() {
 	fmt.Println(seq.Set(3))
 	fmt.Println(seq.Set(4))
 	fmt.Println(seq.Set(5))
+	fmt.Println(seq.Completed())
+	for i := 0; i < 10; i++ {
+		fmt.Println(seq.Set(uint(i)))
+	}
+	fmt.Println(seq.Completed())
 }
 ```
