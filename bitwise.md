@@ -234,3 +234,28 @@ func main() {
 	fmt.Println("is the code set?", code.Has(A|B|C|D), code.IsSet())
 }
 ```
+
+## Set / Unset
+
+```go
+package main
+
+import (
+	"fmt"
+)
+
+func main() {
+	var b byte
+	// Set.
+	b |= (1 << 0)
+	fmt.Println(b)
+
+	b |= (1 << 1)
+	fmt.Println(b)
+
+	// Unset.
+	b &^= (1 << 0)
+	b &^= (1 << 1)
+	fmt.Println(b)
+}
+```
