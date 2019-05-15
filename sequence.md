@@ -1,4 +1,7 @@
+
 ## Sequence
+
+NOTE: Also take a look at `bitwise.md`.
 
 Application:
 - saga
@@ -77,5 +80,115 @@ func main() {
 		fmt.Println(seq.Set(uint(i)))
 	}
 	fmt.Println(seq.Completed())
+}
+```
+
+## State Machine 
+```go
+package main
+
+import (
+	"fmt"
+	"sort"
+)
+
+type Sequence []uint
+
+func (s Sequence) Len() int           { return len(s) }
+func (s Sequence) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s Sequence) Less(i, j int) bool { return s[i] < s[j] }
+
+type StateMachine struct {
+	state    byte
+	sequence Sequence
+}
+
+func NewStateMachine(seq Sequence) *StateMachine {
+	sort.Sort(seq)
+	return &StateMachine{
+		sequence: seq,
+	}
+}
+
+func (s *StateMachine) CanSet(tgt uint) bool {
+	// If the state already exists, it should be false.
+	if s.state&(1<<tgt) != 0 {
+		return false
+	}
+
+	var curr byte
+	for _, seq := range s.sequence {
+		noSkip := curr == s.state
+		isCurr := seq == tgt
+		if noSkip && isCurr {
+			return true
+		}
+		curr |= (1 << seq)
+	}
+	return false
+}
+
+func (s *StateMachine) CanUnset(tgt uint) bool {
+	// If the state is not yet set, it should be false.
+	if s.state&(1<<tgt) == 0 {
+		return false
+	}
+	var curr byte
+	for _, seq := range s.sequence {
+		curr |= (1 << seq)
+		noSkip := curr == s.state
+		isCurr := seq == tgt
+		if noSkip && isCurr {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *StateMachine) Set(tgt uint) bool {
+	if s.CanSet(tgt) {
+		s.state |= (1 << tgt)
+		return (s.state & (1 << tgt)) != 0
+	}
+	return false
+}
+
+func (s *StateMachine) Unset(tgt uint) bool {
+	if s.CanUnset(tgt) {
+		s.state &^= (1 << tgt)
+		return (s.state & (1 << tgt)) == 0
+	}
+	return false
+}
+
+func (s *StateMachine) IsZero() bool {
+	return s.state == 0
+}
+func (s *StateMachine) IsCompleted() bool {
+	var curr byte
+	for _, seq := range s.sequence {
+		curr |= (1 << seq)
+	}
+	return curr == s.state
+}
+func main() {
+	sm := NewStateMachine(Sequence{5, 4, 2, 1, 3})
+	fmt.Println(sm.Set(1))
+	fmt.Println(sm.Set(2))
+	fmt.Println(sm.Set(3))
+	fmt.Println(sm.Unset(2))
+	fmt.Println(sm.Unset(3))
+	fmt.Println(sm.Unset(4))
+	var i uint = 5
+	for !sm.IsZero() {
+		sm.Unset(i)
+		i--
+	}
+	fmt.Println(sm.state)
+	for !sm.IsCompleted() {
+		sm.Set(i)
+		i++
+	}
+	fmt.Println(sm.state)
 }
 ```
