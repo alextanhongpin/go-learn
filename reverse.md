@@ -56,3 +56,28 @@ func TestReverse(t *testing.T) {
 	}
 }
 ```
+
+## Reversing Integer
+
+Can be used to check if an integer is a palindrone or not. This way of reversing is done without converting the integer to string first. Note that reversing `100` will result in `1`, since the zeros will be removed.
+
+```go
+package main
+
+import (
+	"fmt"
+)
+
+func main() {
+	fmt.Println(reverseInt(987654321))
+}
+
+func reverseInt(n int) int {
+	var reversed int
+	for n > 0 {
+		reversed = (reversed * 10) + (n % 10)
+		n /= 10
+	}
+	return reversed
+}
+```
