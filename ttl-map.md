@@ -142,3 +142,34 @@ func main() {
 	fmt.Println("done")
 }
 ```
+
+## Modulo time
+
+Both results will give the correct modulo time. This is useful for determining the time window and can be used for time series bucket assignment.
+```
+package main
+
+import (
+	"fmt"
+	"log"
+	"testing/quick"
+)
+
+func main() {
+	f := func(a, b int64) bool {
+		return one(a, b) == two(a, b)
+	}
+	if err := quick.Check(f, nil); err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("program terminating")
+}
+
+func one(ts, duration int64) int64 {
+	return ts / duration * duration
+}
+
+func two(ts, duration int64) int64 {
+	return ts - (ts % duration)
+}
+```
