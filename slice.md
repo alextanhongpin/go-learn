@@ -74,3 +74,75 @@ Output:
 [anotherInts] start [] 0 2
 [anotherInts] end [0 1 2 3 4] 5 8
 ```
+
+## Stack and Queue
+
+```go
+package main
+
+import (
+	"fmt"
+)
+
+// First in, first out (FIFO)
+type Queue struct {
+	list []int
+}
+
+func NewQueue() *Queue {
+	return &Queue{
+		list: make([]int, 0),
+	}
+}
+
+func (q *Queue) Push(i ...int) {
+	q.list = append(q.list, i...)
+}
+
+func (q *Queue) Size() int {
+	return len(q.list)
+}
+func (q *Queue) Pop() int {
+	var head int
+	head, q.list = q.list[0], q.list[1:]
+	return head
+}
+
+type Stack struct {
+	list []int
+}
+
+// Last-in, first-out (LIFO).
+func NewStack() *Stack {
+	return &Stack{
+		list: make([]int, 0),
+	}
+}
+func (s *Stack) Push(i ...int) {
+	s.list = append(s.list, i...)
+}
+func (s *Stack) Size() int {
+	return len(s.list)
+}
+func (s *Stack) Pop() int {
+	var tail int
+	s.list, tail = s.list[:len(s.list)-1], s.list[len(s.list)-1]
+	return tail
+}
+
+func main() {
+	fmt.Println("QUEUE")
+	q := NewQueue()
+	q.Push(1, 2, 3, 4, 5)
+	for q.Size() > 0 {
+		fmt.Println(q.Pop())
+	}
+
+	fmt.Println("STACK")
+	s := NewStack()
+	s.Push(1, 2, 3, 4, 5)
+	for s.Size() > 0 {
+		fmt.Println(s.Pop())
+	}
+}
+```
