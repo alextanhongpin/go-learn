@@ -73,9 +73,10 @@ func (c *Cache) Get(key string) interface{} {
 }
 
 func (c *Cache) loop(duration time.Duration) {
+	defer c.WaitGroup.Done()
+	
 	t := time.NewTicker(duration)
 	defer t.Stop()
-	defer c.WaitGroup.Done()
 	for {
 		select {
 		case <-c.quitCh:
@@ -92,5 +93,134 @@ func (c *Cache) loop(duration time.Duration) {
 			c.Unlock()
 		}
 	}
+}
+```
+
+## With ExpireAt
+
+```go
+package main
+
+import (
+	"errors"
+	"fmt"
+	"sync"
+	"time"
+)
+
+var (
+	ErrItemDoesNotExist = errors.New("item does not exist")
+	ErrItemExpired      = errors.New("item expired")
+)
+
+type Item struct {
+	ExpireAt time.Time
+	Key      string
+	Value    interface{}
+}
+
+func NewItem(key string, value interface{}, ttl time.Duration) Item {
+	return Item{
+		ExpireAt: time.Now().Add(ttl),
+		Key:      key,
+		Value:    value,
+	}
+}
+
+type Cache struct {
+	sync.RWMutex
+	sync.Once
+	sync.WaitGroup
+	quit  chan interface{}
+	items map[string]Item
+}
+
+func NewCache(cleanupPeriod time.Duration) *Cache {
+	cache := &Cache{
+		quit:  make(chan interface{}),
+		items: make(map[string]Item),
+	}
+	cache.WaitGroup.Add(1)
+	go cache.worker(cleanupPeriod)
+	return cache
+}
+
+func (c *Cache) worker(cleanupPeriod time.Duration) {
+	// Defer sequence matter. The t.Stop will be called before c.WaitGroup.
+	defer c.WaitGroup.Done()
+
+	t := time.NewTicker(cleanupPeriod)
+	defer t.Stop()
+	for {
+		select {
+		case <-c.quit:
+			fmt.Println("quit")
+			return
+		case <-t.C:
+			fmt.Println("cleanup")
+			c.Lock()
+			for key, item := range c.items {
+				if item.ExpireAt.Before(time.Now()) {
+					fmt.Println("clear", key)
+					delete(c.items, key)
+				}
+			}
+			c.Unlock()
+
+		}
+	}
+}
+
+func (c *Cache) Stop() {
+	c.Once.Do(func() {
+		close(c.quit)
+		c.Wait()
+		fmt.Println("terminated")
+	})
+}
+
+func (c *Cache) Set(key string, value interface{}, duration time.Duration) {
+	c.Lock()
+	c.items[key] = NewItem(key, value, duration)
+	c.Unlock()
+}
+
+func (c *Cache) Get(key string) (*Item, error) {
+	c.RLock()
+	item, exist := c.items[key]
+	c.RUnlock()
+	if !exist {
+		return nil, ErrItemDoesNotExist
+	}
+
+	if item.ExpireAt.Before(time.Now()) {
+		c.Delete(key)
+		return nil, ErrItemExpired
+	}
+	return &item, nil
+}
+
+func (c *Cache) Delete(key string) {
+	c.Lock()
+	delete(c.items, key)
+	c.Unlock()
+}
+
+func main() {
+	defer fmt.Println("one")
+	defer fmt.Println("two")
+
+	cleanupEvery := 1 * time.Second
+	cache := NewCache(cleanupEvery)
+	defer cache.Stop()
+	cache.Set("hello", "world", 1*time.Second)
+	val, err := cache.Get("hello")
+	fmt.Println(val, err)
+
+	time.Sleep(5 * time.Second)
+	val, err = cache.Get("hello")
+	fmt.Println(val)
+
+	fmt.Println("Hello, playground")
 }
 ```
