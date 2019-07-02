@@ -289,6 +289,104 @@ func Retry(fn Exec) Exec {
 }
 ```
 
+## Types of Decorator Pattern
+
+```go
+package main
+
+import (
+	"fmt"
+)
+
+// Define the function to decorate, e.g. Greet.
+type Greeter interface {
+	Greet(name string) string
+}
+
+// Create a first class function for the method Greet which
+// fulfils the interface Greeter. The alternative is to create another struct.
+type GreetFn func(string) string
+
+func (g GreetFn) Greet(str string) string {
+	return g(str)
+}
+
+// Decorator takes in the struct and return the decorated struct.
+type Decorator func(Greeter) Greeter
+
+func WithHonorific(honorific string) Decorator {
+	return func(g Greeter) Greeter {
+		return GreetFn(func(name string) string {
+			return honorific + " " + g.Greet(name)
+		})
+	}
+}
+
+func WithWeather(weather string) Decorator {
+	return func(g Greeter) Greeter {
+		return GreetFn(func(name string) string {
+			return fmt.Sprintf("Hi %s, the weather is %s", g.Greet(name), weather)
+		})
+	}
+}
+
+type NameGreeter struct {
+}
+
+func (n *NameGreeter) Greet(name string) string {
+	return name
+}
+
+func main() {
+	{
+		var greeter = WithHonorific("Mr.")(&NameGreeter{})
+		fmt.Println(greeter.Greet("John"))
+	}
+	{
+		var greeter = &WeatherGreeter{&NameGreeter{}, "rainy"}
+		fmt.Println(greeter.Greet("John"))
+	}
+	{
+		var greeter = WithWeatherStruct("sunny")(&NameGreeter{})
+		fmt.Println(greeter.Greet("Jane"))
+	}
+	{
+		var greeter = WithWeather("rainy")(WithHonorific("Mr.")(&NameGreeter{}))
+		fmt.Println(greeter.Greet("Jessy"))
+	}
+	{
+		var greeter = decorate(&NameGreeter{}, WithHonorific("Mr."), WithWeather("rainy"))
+		fmt.Println(greeter.Greet("Carlos"))
+	}
+	{
+		var greeter = decorate(&NameGreeter{}, WithHonorific("Dr."), WithWeatherStruct("sunny"))
+		fmt.Println(greeter.Greet("Alpha"))
+	}
+}
+
+func decorate(g Greeter, decorators ...Decorator) Greeter {
+	for _, decorator := range decorators {
+		g = decorator(g)
+	}
+	return g
+}
+
+type WeatherGreeter struct {
+	greeter Greeter
+	weather string
+}
+
+func (w *WeatherGreeter) Greet(name string) string {
+	return fmt.Sprintf("Hi %s, the weather is %s!", w.greeter.Greet(name), w.weather)
+}
+
+func WithWeatherStruct(weather string) Decorator {
+	return func(greeter Greeter) Greeter {
+		return &WeatherGreeter{greeter, weather}
+	}
+}
+```
+
 ## References
 
 https://www.bartfokker.nl/posts/decorators/
