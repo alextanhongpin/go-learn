@@ -68,3 +68,40 @@ func (c *ClientAdapter) FetchBooks() {
 // TODO: Add middleware retries, error
 // https://medium.com/@nitishkr88/http-retries-in-go-e622e51d249f
 ```
+
+## Basic JSON Decoder/Encoder
+
+```go
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"os"
+	"strings"
+)
+
+type Request struct {
+	Name string `json:"name"`
+}
+
+func main() {
+	s := strings.NewReader(`{
+		"name": "John"
+	}`)
+
+	var req Request
+	err := json.NewDecoder(s).Decode(&req)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("decoded: %#v\n", req)
+
+	err = json.NewEncoder(os.Stdout).Encode(req)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+```
