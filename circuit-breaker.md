@@ -241,3 +241,223 @@ func main() {
 	}
 }
 ```
+
+## Circuit Breaker Rewrite
+
+```go
+package main
+
+import (
+	"errors"
+	"fmt"
+	"reflect"
+	"sync"
+	"sync/atomic"
+	"time"
+)
+
+var ErrTooManyRequests = errors.New("too many requests")
+
+type State struct {
+	failureCount          int64
+	failureCountThreshold int64
+	successCount          int64
+	successCountThreshold int64
+	timeoutTimer          time.Time
+	timeoutDuration       time.Duration
+	sync.RWMutex
+}
+
+func (s *State) ResetFailureCount() {
+	s.Lock()
+	s.failureCount = 0
+	s.Unlock()
+}
+
+func (s *State) IncrementFailureCount() {
+	s.Lock()
+	s.failureCount += 1
+	s.Unlock()
+}
+
+func (s *State) StartTimeoutTimer() {
+	s.Lock()
+	s.timeoutTimer = time.Now()
+	s.Unlock()
+}
+
+func (s *State) ResetSuccessCount() {
+	s.Lock()
+	s.successCount = 0
+	s.Unlock()
+}
+
+func (s *State) IncrementSuccessCount() {
+	s.Lock()
+	s.successCount += 1
+	s.Unlock()
+}
+
+func (s *State) IsSuccessCountThresholdReached() bool {
+	s.RLock()
+	count, threshold := s.successCount, s.successCountThreshold
+	s.RUnlock()
+	return count >= threshold
+}
+
+func (s *State) IsFailureCountThresholdReached() bool {
+	s.RLock()
+	count, threshold := s.failureCount, s.failureCountThreshold
+	s.RUnlock()
+	return count >= threshold
+}
+
+func (s *State) IsTimeoutTimerExpired() bool {
+	return time.Since(s.timeoutTimer) > s.timeoutDuration
+}
+
+func NewState(
+	successCountThreshold,
+	failureCountThreshold int64,
+	timeoutDuration time.Duration,
+) *State {
+	return &State{
+		successCountThreshold: successCountThreshold,
+		failureCountThreshold: failureCountThreshold,
+		timeoutDuration:       timeoutDuration,
+	}
+}
+
+type CircuitBreaker interface {
+	Next() CircuitBreaker
+	Do(func() error) error
+}
+
+type Closed struct {
+	state *State
+	name  string // To identify the state.
+}
+
+func NewClosed(state *State) *Closed {
+	state.ResetFailureCount()
+	return &Closed{state: state}
+}
+
+func (c *Closed) Do(fn func() error) error {
+	err := fn()
+	if err != nil {
+		c.state.IncrementFailureCount()
+		return err
+	}
+	return nil
+}
+
+func (c *Closed) Next() CircuitBreaker {
+	if c.state.IsFailureCountThresholdReached() {
+		return NewOpen(c.state)
+	}
+	return c
+}
+
+type Open struct {
+	state *State
+}
+
+func NewOpen(state *State) *Open {
+	state.StartTimeoutTimer()
+	return &Open{state: state}
+}
+
+func (o *Open) Do(fn func() error) error {
+	return ErrTooManyRequests
+}
+
+func (o *Open) Next() CircuitBreaker {
+	if o.state.IsTimeoutTimerExpired() {
+		return NewHalfOpen(o.state)
+	}
+	return o
+}
+
+type HalfOpen struct {
+	// error error
+	error int64
+	state *State
+}
+
+func NewHalfOpen(state *State) *HalfOpen {
+	state.ResetSuccessCount()
+	return &HalfOpen{state: state}
+}
+
+func (h *HalfOpen) Do(fn func() error) error {
+	err := fn()
+	if err != nil {
+		atomic.CompareAndSwapInt64(&h.error, 0, 1)
+		// h.error = err
+		return err
+	}
+	h.state.IncrementSuccessCount()
+	// h.error = nil
+	atomic.CompareAndSwapInt64(&h.error, 1, 0)
+	return nil
+}
+
+func (h *HalfOpen) Next() CircuitBreaker {
+	if atomic.LoadInt64(&h.error) == 1 {
+		// if h.error != nil {
+		return NewOpen(h.state)
+	}
+	if h.state.IsSuccessCountThresholdReached() {
+		return NewClosed(h.state)
+	}
+	return h
+}
+
+type CircuitBreakerImpl struct {
+	state CircuitBreaker
+}
+
+func NewCircuitBreaker(successCountThreshold, failureCountThreshold int64, timeoutDuration time.Duration) *CircuitBreakerImpl {
+	state := NewState(successCountThreshold, failureCountThreshold, timeoutDuration)
+	return &CircuitBreakerImpl{
+		state: NewClosed(state),
+	}
+}
+
+func (c *CircuitBreakerImpl) Do(fn func() error) error {
+	c.state = c.state.Next()
+	// Print current state.
+	fmt.Println("[CircuitBreakerState]:", reflect.TypeOf(c.state).String())
+	return c.state.Do(fn)
+}
+
+func main() {
+	var (
+		successThreshold int64 = 5
+		failureThreshold int64 = 5
+		timeoutDuration        = 1 * time.Second
+	)
+	cb := NewCircuitBreaker(successThreshold, failureThreshold, timeoutDuration)
+
+	// Trigger error 6 times.
+	for i := 0; i < 6; i += 1 {
+		err := cb.Do(func() error { return errors.New("bad request") })
+		if err != nil {
+			fmt.Println(err)
+		}
+	}
+
+	// Sleep for 1 second to recover.
+	time.Sleep(2 * time.Second)
+	// Trigger success 6 times.
+	for i := 0; i < 6; i += 1 {
+		err := cb.Do(func() error { return nil })
+		if err != nil {
+			fmt.Println(err)
+		}
+	}
+
+	fmt.Println("Hello, playground")
+}
+```
