@@ -163,3 +163,54 @@ func main() {
 	fmt.Println("Hello, playground")
 }
 ```
+
+## Alternative
+
+A better approach is to delegate the password to a model:
+
+```go
+package main
+
+import (
+	"fmt"
+	"log"
+
+	"golang.org/x/crypto/bcrypt"
+)
+
+type EncryptedPassword interface {
+	Compare(password string) error
+}
+
+type User struct {
+	Password EncryptedPassword
+}
+
+type BcryptPassword string
+
+func (b BcryptPassword) Compare(plainText string) error {
+	return bcrypt.CompareHashAndPassword([]byte(b), []byte(plainText))
+}
+
+// BcryptPasswordFactory
+func NewBcryptPassword(plainText string) (BcryptPassword, error) {
+	// NOTE: Use higher MinCost.
+	cipher, err := bcrypt.GenerateFromPassword([]byte(plainText), bcrypt.MinCost)
+	return BcryptPassword(string(cipher)), err
+}
+
+func main() {
+	password := "hello world"
+	encrypted, err := NewBcryptPassword(password)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(encrypted)
+	if err := encrypted.Compare(password); err != nil {
+		log.Fatal(err)
+	}
+	if err := encrypted.Compare("wrong password"); err != nil {
+		log.Fatal(err)
+	}
+}
+```
