@@ -214,3 +214,44 @@ func main() {
 	}
 }
 ```
+
+## Using Types vs Primitives Values
+
+In the example above, we use a type to define encrypted password (or an interface, because there could be several polymorphic types of password encryption, e.g. using bcrypt or argon2id). But this presents some additional issue, such as storing the values to the database. We now need to implement `values` and `scanner` for the types in order to store them. An alternative is to create a type, but not using the type directly. Instead, create a method for that type that will return the primitive value directly.
+
+```go
+package main
+
+type Argon2Password struct {
+}
+
+type BcryptPassword struct {
+	value string
+}
+
+func NewBcryptPassword(password string) *BcryptPassword {
+	// Your bcrypt encryption method here.
+	encryptBcrypt := func(value string) string {
+		return value
+	}
+	return &BcryptPassword{value: encryptBcrypt(password)}
+}
+
+func (b *BcryptPassword) Value() string {
+	return b.value
+}
+
+func (b *BcryptPassword) Compare(password string) bool {
+	// Compare your password here.
+	return false
+}
+
+type User struct {
+	encryptedPassword string
+}
+
+func main() {
+	var u User
+	u.encryptedPassword = NewBcryptPassword("hello world").Value()
+}
+```
