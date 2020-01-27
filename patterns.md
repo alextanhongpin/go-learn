@@ -255,3 +255,143 @@ func main() {
 	u.encryptedPassword = NewBcryptPassword("hello world").Value()
 }
 ```
+
+## Password Polymorphism with different strategy
+
+```go
+package main
+
+import (
+	"errors"
+	"log"
+
+	"golang.org/x/crypto/bcrypt"
+)
+
+var (
+	ErrPasswordTooShort   = errors.New("password too short")
+	ErrPasswordDoNotMatch = errors.New("password do not match")
+)
+
+const (
+	MinPasswordLength = 8
+)
+
+type EncryptionAlgorithm func(password string) (SecurePassword, error)
+
+func bcryptHasher(password string) (SecurePassword, error) {
+	cipher, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
+	return &BcryptPassword{value: string(cipher)}, err
+}
+
+func main() {
+	password := "hello world"
+	pwd, err := encryptPassword(password)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err = checkPasswordMatch(pwd, password); err != nil {
+		log.Fatal(err)
+	}
+	log.Println("bcrypt value:", pwd.Value())
+	log.Println("completed")
+}
+
+func encryptPassword(password string) (SecurePassword, error) {
+	pwd := NewPlainTextPassword(password, MinLength(7))
+	return pwd.Encrypt()
+}
+
+func checkPasswordMatch(spd SecurePassword, password string) error {
+	pwd := NewPlainTextPassword(password)
+	if err := pwd.Validate(); err != nil {
+		return err
+	}
+	return spd.Compare(pwd)
+}
+
+type (
+	Password interface {
+		Encrypt() (SecurePassword, error)
+		Equal(Password) error
+		Valid() bool
+		Validate() error
+		Value() string
+	}
+
+	SecurePassword interface {
+		Compare(Password) error
+		Value() string
+	}
+)
+
+type PlainTextPassword struct {
+	minLength int
+	value     string
+	hasher    EncryptionAlgorithm
+}
+
+func (p *PlainTextPassword) Valid() bool {
+	return !(len(p.Value()) < p.minLength)
+}
+
+func (p *PlainTextPassword) Validate() error {
+	if valid := p.Valid(); !valid {
+		return ErrPasswordTooShort
+	}
+	return nil
+}
+
+func (p *PlainTextPassword) Value() string {
+	return p.value
+}
+
+func (p *PlainTextPassword) Equal(pwd Password) error {
+	if p.Value() != pwd.Value() {
+		return ErrPasswordDoNotMatch
+	}
+	return nil
+}
+
+func (p *PlainTextPassword) Encrypt() (SecurePassword, error) {
+	return p.hasher(p.Value())
+}
+
+type PlainTextPasswordOption func(p *PlainTextPassword)
+
+func MinLength(len int) PlainTextPasswordOption {
+	return func(pwd *PlainTextPassword) {
+		pwd.minLength = len
+	}
+}
+
+func Hasher(hasher EncryptionAlgorithm) PlainTextPasswordOption {
+	return func(pwd *PlainTextPassword) {
+		pwd.hasher = hasher
+	}
+}
+
+func NewPlainTextPassword(value string, opts ...PlainTextPasswordOption) *PlainTextPassword {
+	pwd := PlainTextPassword{
+		value:     value,
+		minLength: MinPasswordLength,
+		hasher:    bcryptHasher,
+	}
+	for _, opt := range opts {
+		opt(&pwd)
+	}
+	return &pwd
+}
+
+type BcryptPassword struct {
+	value string
+}
+
+func (b *BcryptPassword) Value() string {
+	return string(b.value)
+}
+
+func (b *BcryptPassword) Compare(pwd Password) error {
+	return bcrypt.CompareHashAndPassword([]byte(b.Value()), []byte(pwd.Value()))
+}
+```
