@@ -86,6 +86,134 @@ func main() {
 }
 ```
 
+## Transaction 
+
+
+```go
+package main
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+)
+
+type Tx interface {
+	Exec(query string, args ...interface{}) (Result, error)
+	ExecContext(ctx context.Context, query string, args ...interface{}) (Result, error)
+	Prepare(query string) (*Stmt, error)
+	PrepareContext(ctx context.Context, query string) (*Stmt, error)
+	Query(query string, args ...interface{}) (*Rows, error)
+	QueryContext(ctx context.Context, query string, args ...interface{}) (*Rows, error)
+	QueryRow(query string, args ...interface{}) *Row
+	QueryRowContext(ctx context.Context, query string, args ...interface{}) *Row
+}
+
+type TxFn func(Tx) error
+
+func withTransaction(db *sql.DB, fn TxFn) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return
+	}
+
+	defer func() {
+		if p := recover(); p != nil {
+			// a panic occurred, rollback and repanic
+			tx.Rollback()
+			panic(p)
+		} else if err != nil {
+			// something went wrong, rollback
+			tx.Rollback()
+		} else {
+			// all good, commit
+			err = tx.Commit()
+		}
+	}()
+
+	err = fn(tx)
+	return err
+}
+
+func main() {
+
+	fmt.Println("Hello, playground")
+}
+```
+
+## Sample Unit of Work (?)
+
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+)
+
+type Tx interface {
+	Commit()
+}
+
+type User struct {
+	Name string
+}
+type Photo struct {
+	Name string
+}
+
+type userRepository interface {
+	Save(context.Context, User) error
+}
+
+type photoRepository interface {
+	Save(context.Context) error
+}
+
+type UserRepository struct {
+	tx Tx
+}
+
+func NewUserRepository(tx Tx) *UserRepository {
+	return &UserRepository{tx: tx}
+}
+
+func (u *UserRepository) Save(ctx context.Context) error {
+	return nil
+}
+
+type PhotoRepository struct {
+	tx Tx
+}
+
+func NewPhotoRepository(tx Tx) *PhotoRepository {
+	return &PhotoRepository{tx: tx}
+}
+
+func (p *PhotoRepository) Save(ctx context.Context) error {
+	return nil
+}
+
+func main() {
+	db := ... // Connect to database.
+	err := withTransaction(db, func(tx Tx) error {
+		ctx := context.Background()
+		ur := NewUserRepository(tx)
+		pr := NewPhotoRepository(tx)
+		if err := ur.Save(ctx); err != nil {
+			return err
+		}
+		if err := pr.Save(ctx); err != nil {
+			return err
+		}
+		return nil
+	})
+
+	fmt.Println("Hello, playground")
+}
+```
+
 # Key-value store
 
 - https://github.com/gomods/athens
