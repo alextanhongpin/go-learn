@@ -214,6 +214,67 @@ func main() {
 }
 ```
 
+## Alternative Transaction Pattern with Golang
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+)
+
+type Tx interface {
+	Exec(query string, args ...interface{}) (Result, error)
+	ExecContext(ctx context.Context, query string, args ...interface{}) (Result, error)
+	Prepare(query string) (*Stmt, error)
+	PrepareContext(ctx context.Context, query string) (*Stmt, error)
+	Query(query string, args ...interface{}) (*Rows, error)
+	QueryContext(ctx context.Context, query string, args ...interface{}) (*Rows, error)
+	QueryRow(query string, args ...interface{}) *Row
+	QueryRowContext(ctx context.Context, query string, args ...interface{}) *Row
+}
+
+type UserRepository struct {
+	tx Tx
+}
+
+func NewUserRepository(tx Tx) *UserRepository {
+	return &UserRepository{tx: tx}
+}
+
+func (u *UserRepository) WithTx(tx Tx) *UserRepository {
+	return NewUserRepository(tx)
+}
+
+type PhotoRepository struct {
+	tx Tx
+}
+
+func NewPhotoRepository(tx Tx) *PhotoRepository {
+	return &PhotoRepository{tx: tx}
+}
+
+func (p *PhotoRepository) WithTx(tx Tx) *PhotoRepository {
+	return NewPhotoRepository(tx)
+}
+
+func main() {
+	db := // Initialize db...
+	defer db.Close()
+	
+	userRepo := NewUserRepository(db)
+	photoRepo := NewPhotoRepository(db)
+	
+	withTransaction(db, func(tx Tx) error {
+		userTx := userRepo.WithTx(tx)
+		photoTx := photoRepo.WithTx(tx)
+		// Do something...
+		return nil
+	})
+	fmt.Println("Hello, playground")
+}
+```
 # Key-value store
 
 - https://github.com/gomods/athens
