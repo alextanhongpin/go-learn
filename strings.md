@@ -60,3 +60,53 @@ func checkDups(str string) bool {
 	return true
 }
 ```
+
+
+## Replace
+
+```go
+package main
+
+import (
+	"log"
+	"strings"
+)
+
+func main() {
+
+	// Replace A with T, and vice-versa.
+	// Replace C with G, and vice-versa.
+	var (
+		dna      = "ATTTACGATGC"
+		expected = "TAAATGCTACG"
+	)
+
+	var dnaReplacer = strings.NewReplacer(
+		"A", "T",
+		"T", "A",
+		"C", "G",
+		"G", "C",
+	)
+
+	if result := dnaReplacer.Replace(dna); result != expected {
+		log.Fatalf("expected %s, got %s", expected, result)
+	}
+
+	replaceFn := func(r rune) rune {
+		switch r {
+		case 'A':
+			return 'T'
+		case 'T':
+			return 'A'
+		case 'C':
+			return 'G'
+		case 'G':
+			return 'C'
+		}
+		return r
+	}
+	if result := strings.Map(replaceFn, dna); result != expected {
+		log.Fatalf("expected %s, got %s", expected, result)
+	}
+}
+```
