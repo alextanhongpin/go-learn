@@ -322,3 +322,18 @@ reflected := reflect.New(reflect.TypeOf(real)).Elem().Interface()
 fmt.Println(real)
 fmt.Println(reflected)
 ```
+
+## Check empty values with reflect
+
+Alternative is to just check nil, 0 or empty string:
+
+```go
+package gen
+
+import "reflect"
+
+func IsZero(i interface{}) bool {
+	v := reflect.ValueOf(i)
+	return !v.IsValid() || reflect.DeepEqual(v.Interface(), reflect.Zero(v.Type()).Interface())
+}
+```
