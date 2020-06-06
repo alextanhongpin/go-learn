@@ -53,3 +53,46 @@ func expensiveWork() (interface{}, error) {
 https://rodaine.com/2018/08/x-files-sync-golang/
 https://rodaine.com/2017/05/x-files-time-rate-golang/
 https://topic.alibabacloud.com/a/golang-singleflight_1_38_30919329.html
+
+
+## Example
+
+```go
+package main
+
+import (
+	"fmt"
+	"sync"
+	"time"
+
+	"golang.org/x/sync/singleflight"
+)
+
+func main() {
+	var sfg singleflight.Group
+	var wg sync.WaitGroup
+
+	wg.Add(2)
+
+	go func() {
+		r, err, shared := sfg.Do("user-1", func() (interface{}, error) {
+			fmt.Println("doing work 1")
+			time.Sleep(1 * time.Second)
+			return 1, nil
+		})
+		fmt.Println(r, err, shared)
+		wg.Done()
+	}()
+	go func() {
+		r, err, shared := sfg.Do("user-1", func() (interface{}, error) {
+			fmt.Println("doing work 2")
+			time.Sleep(1 * time.Second)
+			return 1, nil
+		})
+		fmt.Println(r, err, shared)
+		wg.Done()
+	}()
+	wg.Wait()
+	fmt.Println("Hello, playground")
+}
+```
