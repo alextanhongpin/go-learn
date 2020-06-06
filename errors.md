@@ -89,5 +89,107 @@ func main() {
 		fmt.Println("yes", fe)
 	}
 }	
+```
 
+
+## Error identity
+
+```go
+package main
+
+import (
+	"errors"
+	"fmt"
+)
+
+var ErrOriginal = errors.New("original")
+
+type ErrNotFound struct {
+	name  string
+	error error
+}
+
+func (e *ErrNotFound) Error() string {
+	return fmt.Sprintf("%s: not found", e.name)
+}
+
+func (e *ErrNotFound) Unwrap() error {
+	return e.error
+}
+
+func NewErrNotFound(err error, name string) *ErrNotFound {
+	return &ErrNotFound{
+		name:  name,
+		error: err,
+	}
+}
+
+func main() {
+	err := NewErrNotFound(ErrOriginal, "user")
+
+	fmt.Println(err)
+	fmt.Println(errors.Is(err, ErrOriginal))
+	
+	var nferr *ErrNotFound
+	ok := errors.As(err, &nferr)
+	fmt.Println(ok, nferr)
+}
+```
+
+## MultiError
+
+```go
+package main
+
+import (
+	"errors"
+	"fmt"
+	"strings"
+)
+
+type MultiError struct {
+	errors []error
+}
+
+func NewMultiError(errs ...error) *MultiError {
+	if errs == nil {
+		errs = make([]error, 0)
+	}
+	return &MultiError{
+		errors: errs,
+	}
+}
+
+func (m *MultiError) Error() string {
+	msg := make([]string, len(m.errors))
+	for i, err := range m.errors {
+		msg[i] = err.Error()
+	}
+	return strings.Join(msg, "\n")
+}
+
+func (m *MultiError) Add(err error) bool {
+	if err != nil {
+		m.errors = append(m.errors, err)
+		return true
+	}
+	return false
+}
+
+func (m *MultiError) AddString(s string) bool {
+	if s != "" {
+		m.errors = append(m.errors, errors.New(s))
+		return true
+	}
+	return false
+}
+
+func main() {
+	merr := NewMultiError()
+	if merr.Add(errors.New("hello")) {
+		fmt.Println("errors added")
+	}
+	merr.AddString("world")
+	fmt.Println(merr)
+}
 ```
