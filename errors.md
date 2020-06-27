@@ -193,3 +193,79 @@ func main() {
 	fmt.Println(merr)
 }
 ```
+
+## Error handling concurrency
+
+```go
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log"
+	"math/rand"
+	"time"
+
+	"golang.org/x/sync/errgroup"
+)
+
+var (
+	Web   = fakeSearch("web")
+	Image = fakeSearch("image")
+	Video = fakeSearch("video")
+)
+
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	start := time.Now()
+
+	ctx := context.Background()
+	results, err := Google(ctx, "golang")
+	if err != nil {
+		log.Fatal(err)
+	}
+	elapsed := time.Since(start)
+
+	fmt.Println(elapsed)
+	for _, result := range results {
+		fmt.Println(result)
+	}
+}
+
+type Result string
+
+func Google(ctx context.Context, query string) (results []Result, err error) {
+	g, ctx := errgroup.WithContext(ctx)
+
+	searches := []Search{Web, Image, Video}
+	results = make([]Result, len(searches))
+	for i, search := range searches {
+		i, search := i, search
+		g.Go(func() error {
+			result, err := search(ctx, query)
+			fmt.Println(result, err)
+			if err == nil {
+				results[i] = result
+			}
+			return err
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
+type Search func(ctx context.Context, query string) (Result, error)
+
+func fakeSearch(kind string) Search {
+	return func(ctx context.Context, query string) (Result, error) {
+		time.Sleep(time.Duration(rand.Intn(100)) * time.Millisecond)
+		if rand.Intn(2) < 1 {
+			return Result(""), errors.New("bad request")
+		}
+		return Result(fmt.Sprintf("%s result for %q", kind, query)), nil
+	}
+}
+```
