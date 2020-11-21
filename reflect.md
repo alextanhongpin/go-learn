@@ -1,3 +1,36 @@
+## Getting struct names using reflect
+
+```go
+package main
+
+import (
+	"fmt"
+	"reflect"
+)
+
+type Event interface {
+	isEvent()
+}
+
+type PersonCreated struct{}
+
+func (e PersonCreated) isEvent() {}
+
+func main() {
+	fmt.Println(eventName(new(PersonCreated)))
+	fmt.Println(eventName(PersonCreated{}))
+}
+
+func eventName(event Event) string {
+	t := reflect.TypeOf(event)
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	return t.Name()
+}
+```
+
+## Extracting tags using reflect
 ```golang
 package main
 
