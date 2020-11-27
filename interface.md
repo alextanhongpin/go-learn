@@ -51,6 +51,84 @@ func main() {
 }
 ```
 
+## Type-Casting
+
+```go
+package main
+
+import (
+	"errors"
+	"fmt"
+	"log"
+	"reflect"
+)
+
+type Event interface {
+	isEvent()
+}
+
+func (p PersonCreated) isEvent() {}
+func (p PersonUpdated) isEvent() {}
+func (p PersonRemoved) isEvent() {}
+
+type PersonCreated struct{}
+type PersonUpdated struct{}
+type PersonRemoved struct{}
+
+// Why this approach is not ideal.
+type event interface {
+	EventName() string
+}
+
+func getName(i interface{}) string {
+	if t := reflect.TypeOf(i); t.Kind() == reflect.Ptr {
+		return t.Elem().Name()
+	} else {
+		return t.Name()
+	}
+}
+func (t TodoCreated) EventName() string { return getName(t) }
+func (t TodoUpdated) EventName() string { return getName(t) }
+func (t TodoRemoved) EventName() string { return getName(t) }
+
+type TodoCreated struct{}
+type TodoUpdated struct{}
+type TodoRemoved struct{}
+
+func main() {
+	personEvents := []Event{PersonCreated{}, PersonUpdated{}, PersonRemoved{}}
+	for _, p := range personEvents {
+		switch t := p.(type) {
+		case PersonCreated:
+			fmt.Println("creating person", t)
+		case PersonUpdated:
+			fmt.Println("updating person", t)
+		case PersonRemoved:
+			fmt.Println("removing person", t)
+		default:
+			log.Fatal(errors.New("not implemented"))
+		}
+	}
+
+	// This does not require type-casting.
+	// However, just knowing the type does not allow us to query the fields.
+	// We still need to use the method above to get the type-casted fields.
+	todoEvents := []event{TodoCreated{}, TodoUpdated{}, TodoRemoved{}}
+	for _, t := range todoEvents {
+		switch t.EventName() {
+		case getName(TodoCreated{}):
+			fmt.Println("creating todo", t)
+		case getName(TodoUpdated{}):
+			fmt.Println("updating todo", t)
+		case getName(TodoRemoved{}):
+			fmt.Println("removing todo", t)
+		default:
+			log.Fatal(errors.New("not implemented"))
+		}
+	}
+}
+```
+
 
 ## References
 - http://objology.blogspot.com/2011/09/one-of-best-bits-of-programming-advice.html
