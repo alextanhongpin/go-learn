@@ -31,6 +31,30 @@ func main() {
 }
 ```
 
+## Append item in slice
+
+```go
+package main
+
+import (
+	"fmt"
+)
+
+func main() {
+	a := []int{1, 2, 3}
+
+	// Remove from an index.
+	i := 1
+	a = append(a[:i], a[i+1:]...)
+	fmt.Println(a)
+
+	// Append at index.
+	a = append(a[:i+1], a[i:]...)
+	a[i] = 100
+	fmt.Println(a)
+}
+```
+
 
 ## Slice with different len and capacity
 
