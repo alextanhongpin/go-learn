@@ -110,3 +110,31 @@ func main() {
 	}
 }
 ```
+
+
+## Matching string the right way (exact match)
+
+```go
+package main
+
+import (
+	"fmt"
+	"regexp"
+	"strings"
+)
+
+func main() {
+	// Matches exact.
+	fmt.Println(match("food", "foo"))
+	fmt.Println(match("(foo=bar)", "foo"))
+
+	// False positive. Matches partial.
+	fmt.Println(strings.Contains("food", "foo"))
+	fmt.Println(strings.Contains("(foo=bar)", "foo"))
+}
+
+func match(src, tgt string) bool {
+	ok, _ := regexp.MatchString(fmt.Sprintf("\\b%s\\b", tgt), src)
+	return ok
+}
+```
