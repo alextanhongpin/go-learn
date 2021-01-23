@@ -133,3 +133,59 @@ func main() {
 ## References
 - http://objology.blogspot.com/2011/09/one-of-best-bits-of-programming-advice.html
 - https://softwareengineering.stackexchange.com/questions/131667/interface-naming-prefix-can-vs-suffix-able
+
+
+## Choices - Using adapter for converting between interface
+
+The pragmatic way is to define a partial interface at the caller side to select only methods that are in used.
+
+However, when programming, this makes it hard to trace back to the original struct that implements this interface. 
+
+Hence, it could be easier to expose an adapter that shows the original interface (or struct) to partial interface. The original interface should be placed at the same folder that implements it.
+```go
+package main
+
+import (
+	"fmt"
+)
+
+type UserRepository interface {
+	Create()
+	Update()
+	Delete()
+}
+
+type LoginRepository interface {
+	Create()
+}
+
+type userRepository struct {
+}
+
+// Prefer "r" over "l", because changing the name of the repository requires major change.
+func (r *userRepository) Create() {
+	fmt.Println("create")
+}
+
+func (r *userRepository) Update() {
+	fmt.Println("update")
+}
+
+func (r *userRepository) Delete() {
+	fmt.Println("delete")
+}
+
+func adapter(r UserRepository) LoginRepository {
+	return r
+}
+
+func main() {
+	r := new(userRepository)
+	r.Create()
+	r.Update()
+	r.Delete()
+
+	l := adapter(r)
+	l.Create()
+}
+```
