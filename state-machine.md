@@ -541,3 +541,57 @@ func (s *Saga) Do() error {
 	}
 }
 ```
+
+
+## Lightbulb
+
+```go
+package main
+
+import (
+	"fmt"
+)
+
+type State string
+
+const (
+	On  State = "on"
+	Off State = "off"
+)
+
+func main() {
+	m := &Machine{Initial: Off}
+	m.Send(Off)
+	m.Send(On)
+	m.Send(On)
+	m.Send(Off)
+}
+
+type Machine struct {
+	Initial State
+}
+
+func (m *Machine) Send(next State) {
+	switch m.Initial {
+	case On:
+		switch next {
+		case Off:
+			fmt.Println("turning off")
+			m.Initial = Off
+		default:
+			fmt.Println("invalid next state")
+		}
+
+	case Off:
+		switch next {
+		case On:
+			fmt.Println("turning on")
+			m.Initial = On
+		default:
+			fmt.Println("invalid next state")
+		}
+	default:
+		fmt.Println("invalid initial state")
+	}
+}
+```
