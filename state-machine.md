@@ -595,3 +595,101 @@ func (m *Machine) Send(next State) {
 	}
 }
 ```
+## Another lightbulb example
+
+Sending events changes the state:
+
+```go
+package main
+
+import (
+	"fmt"
+)
+
+type EventType string
+type StateType string
+
+type Action interface {
+	Handle() (StateType, error)
+}
+
+type State struct {
+	Action Action
+	Events map[EventType]StateType
+}
+
+type Machine struct {
+	Initial StateType
+	States  map[StateType]State
+}
+
+func (m *Machine) getNextState(e EventType) StateType {
+	if state, ok := m.States[m.Initial]; ok {
+		if next, ok := state.Events[e]; ok {
+			return next
+		}
+		return Invalid
+	}
+	return Invalid
+}
+
+func (m *Machine) Send(e EventType) error {
+	next := m.getNextState(e)
+	if next == Invalid {
+		fmt.Println("invalid transition")
+		return nil
+	}
+	state := m.States[next]
+	m.Initial = next
+
+	_, err := state.Action.Handle()
+	return err
+}
+
+const (
+	On      StateType = "on"
+	Off     StateType = "off"
+	Invalid StateType = "invalid"
+
+	SwitchOn  EventType = "SwitchOn"
+	SwitchOff EventType = "SwitchOff"
+)
+
+type ActionOff struct{}
+
+func (a *ActionOff) Handle() (StateType, error) {
+	fmt.Println("turning off")
+	return Off, nil
+}
+
+type ActionOn struct{}
+
+func (a *ActionOn) Handle() (StateType, error) {
+	fmt.Println("turning on")
+	return On, nil
+}
+
+func main() {
+	m := &Machine{
+		Initial: Off,
+		States: map[StateType]State{
+			On: State{
+				Action: new(ActionOn),
+				Events: map[EventType]StateType{
+					SwitchOff: Off,
+				},
+			},
+			Off: State{
+				Action: new(ActionOff),
+				Events: map[EventType]StateType{
+					SwitchOn: On,
+				},
+			},
+		},
+	}
+	m.Send(SwitchOff)
+	m.Send(SwitchOn)
+	m.Send(SwitchOn)
+	m.Send(SwitchOff)
+}
+```
