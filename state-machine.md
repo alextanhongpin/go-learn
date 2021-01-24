@@ -595,101 +595,178 @@ func (m *Machine) Send(next State) {
 	}
 }
 ```
-## Another lightbulb example
-
-Sending events changes the state:
+## Another implementation
 
 ```go
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 )
 
-type EventType string
-type StateType string
+type (
+	EventType string
+	StateType string
 
-type Action interface {
-	Handle() (StateType, error)
-}
+	Action interface {
+		Handle() (StateType, error)
+	}
 
-type State struct {
-	Action Action
-	Events map[EventType]StateType
-}
+	State struct {
+		// Entry func()
+		// Exit func()
+		Events map[EventType]Action
+	}
+)
 
 type Machine struct {
+	ID      string
 	Initial StateType
 	States  map[StateType]State
 }
 
-func (m *Machine) getNextState(e EventType) StateType {
+func (m *Machine) getAction(e EventType) Action {
 	if state, ok := m.States[m.Initial]; ok {
-		if next, ok := state.Events[e]; ok {
-			return next
+		if action, ok := state.Events[e]; ok {
+			return action
 		}
-		return Invalid
-	}
-	return Invalid
-}
-
-func (m *Machine) Send(e EventType) error {
-	next := m.getNextState(e)
-	if next == Invalid {
-		fmt.Println("invalid transition")
 		return nil
 	}
-	state := m.States[next]
-	m.Initial = next
+	return nil
+}
 
-	_, err := state.Action.Handle()
-	return err
+// TODO: Add context, and dynamic args.
+func (m *Machine) Send(e EventType) error {
+	if m.Initial == End {
+		fmt.Println("done")
+		return nil
+	}
+	action := m.getAction(e)
+	if action == nil {
+		fmt.Println("invalid event")
+		return nil
+	}
+
+	// TODO:
+	//if state.Entry == nil {
+	//	return nil
+	//}
+
+	next, err := action.Handle()
+	if err != nil {
+		return err
+	}
+	if _, ok := m.States[next]; !ok {
+		return errors.New("invalid transition")
+	}
+	m.Initial = next
+	return nil
 }
 
 const (
-	On      StateType = "on"
-	Off     StateType = "off"
-	Invalid StateType = "invalid"
+	OrderCreated    StateType = "OrderCreated"
+	OrderCancelled  StateType = "OrderCancelled"
+	PaymentCreated  StateType = "PaymentCreated"
+	PaymentRejected StateType = "PaymentRejected"
+	PaymentRefunded StateType = "PaymentRefunded"
+	Start           StateType = ""
+	End             StateType = "end"
 
-	SwitchOn  EventType = "SwitchOn"
-	SwitchOff EventType = "SwitchOff"
+	CreateOrder   EventType = "CreateOrder"
+	CancelOrder   EventType = "CancelOrder"
+	CreatePayment EventType = "CreatePayment"
+	RefundPayment EventType = "RefundPayment"
 )
 
-type ActionOff struct{}
+type ActionCreateOrder struct{}
 
-func (a *ActionOff) Handle() (StateType, error) {
-	fmt.Println("turning off")
-	return Off, nil
+func (a *ActionCreateOrder) Handle() (StateType, error) {
+	fmt.Println("creating order")
+	return OrderCreated, nil
 }
 
-type ActionOn struct{}
+type ActionCancelOrder struct{}
 
-func (a *ActionOn) Handle() (StateType, error) {
-	fmt.Println("turning on")
-	return On, nil
+func (a *ActionCancelOrder) Handle() (StateType, error) {
+	fmt.Println("cancelling order")
+	return End, nil
 }
 
+type ActionCreatePayment struct{}
+
+func (a *ActionCreatePayment) Handle() (StateType, error) {
+	fmt.Println("creating payment")
+	// return PaymentCreated, nil
+	return PaymentRejected, errors.New("payment rejected: insufficient credit")
+}
+
+type ActionRefundPayment struct{}
+
+func (a *ActionRefundPayment) Handle() (StateType, error) {
+	fmt.Println("refunding payment")
+	return PaymentRefunded, nil
+}
+
+// TODO: Use builder pattern to construct individual states.
 func main() {
 	m := &Machine{
-		Initial: Off,
+		Initial: Start,
 		States: map[StateType]State{
-			On: State{
-				Action: new(ActionOn),
-				Events: map[EventType]StateType{
-					SwitchOff: Off,
+			Start: State{
+				Events: map[EventType]Action{
+					CreateOrder: new(ActionCreateOrder),
 				},
 			},
-			Off: State{
-				Action: new(ActionOff),
-				Events: map[EventType]StateType{
-					SwitchOn: On,
+			// The resulting state.
+			OrderCreated: State{
+				Events: map[EventType]Action{
+					// The create payment may have two possible states, success or failure.
+					CreatePayment: new(ActionCreatePayment),
+					CancelOrder:   new(ActionCancelOrder),
 				},
 			},
+			PaymentCreated: State{
+				Events: map[EventType]Action{
+					RefundPayment: new(ActionRefundPayment),
+				},
+			},
+			PaymentRefunded: State{
+				Events: map[EventType]Action{
+					CancelOrder: new(ActionCancelOrder),
+				},
+			},
+			PaymentRejected: State{
+				Events: map[EventType]Action{
+					CancelOrder: new(ActionCancelOrder),
+				},
+			},
+			OrderCancelled: State{
+				Events: map[EventType]Action{},
+			},
+			End: State{},
 		},
 	}
-	m.Send(SwitchOff)
-	m.Send(SwitchOn)
-	m.Send(SwitchOn)
-	m.Send(SwitchOff)
+	handleError(m.Send(CreateOrder))
+	handleError(m.Send(CreatePayment))
+	handleError(m.Send(CancelOrder))
+	handleError(m.Send(CreateOrder))
+	handleError(m.Send(RefundPayment))
+	handleError(m.Send(CancelOrder))
+	handleError(m.Send(CreateOrder))
+	handleError(m.Send(CancelOrder))
+
+	b, _ := json.MarshalIndent(m, "", "  ")
+	log.Println(string(b))
+
 }
+
+func handleError(err error) {
+	if err != nil {
+		log.Println("error:", err)
+	}
+}
+
 ```
