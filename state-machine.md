@@ -293,3 +293,251 @@ func Next(prev State) ([]State, bool) {
 	}
 }
 ```
+
+## A more complex example
+
+```go
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
+	"reflect"
+	"runtime"
+)
+
+type CommandHandler interface {
+	Handle() (string, error)
+}
+
+type EndCommand struct {
+}
+
+func (c *EndCommand) Handle() (string, error) {
+	return "end", nil
+}
+
+type State struct {
+	Commands map[string]CommandHandler `json:"commands"`
+	invoke   func() error
+}
+
+func (s *State) On(cmd string, fn CommandHandler) *State {
+	s.Commands[cmd] = fn
+	return s
+}
+
+// TODO: Change to entry/exit.
+func (s *State) Invoke(fn func() error) *State {
+	s.invoke = fn
+	return s
+}
+
+type StateMachine struct {
+	ID      string            `json:"id"`
+	Initial string            `json:"initial"`
+	States  map[string]*State `json:"states"`
+}
+
+func NewStateMachine(initial string) *StateMachine {
+	return &StateMachine{
+		Initial: initial,
+		States:  make(map[string]*State),
+	}
+}
+
+func (sm *StateMachine) State(state string) *State {
+	sm.States[state] = &State{
+		Commands: make(map[string]CommandHandler),
+	}
+	return sm.States[state]
+}
+
+func (sm *StateMachine) Send(cmd string) error {
+	state := sm.States[sm.Initial]
+	if state.invoke != nil {
+		if err := state.invoke(); err != nil {
+			return err
+		}
+	}
+
+	handler, ok := state.Commands[cmd]
+	if handler == nil || !ok {
+		// Invoke-only state machine.
+		return nil
+	}
+
+	evt, err := handler.Handle()
+	sm.Initial = evt
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+type OnCommand struct{}
+
+func (o *OnCommand) Handle() (string, error) {
+	return "on", nil
+}
+
+type OffCommand struct{}
+
+func (o *OffCommand) Handle() (string, error) {
+	return "off", nil
+}
+
+func main() {
+	lightbulb()
+	saga()
+	log.Println(getFunctionName(lightbulb))
+	name := func() {}
+	log.Println(getFunctionName(name))
+}
+
+func lightbulb() {
+	sm := NewStateMachine("off")
+	sm.State("off").
+		Invoke(func() error {
+			log.Println("init off")
+			return nil
+		}).
+		On("on", new(OnCommand))
+
+	sm.State("on").
+		Invoke(func() error {
+			log.Println("init on")
+			return nil
+		}).
+		On("off", new(OffCommand))
+
+	if err := sm.Send("off"); err != nil {
+		log.Println(err)
+	}
+	if err := sm.Send("on"); err != nil {
+		log.Println(err)
+	}
+	if err := sm.Send("off"); err != nil {
+		log.Println(err)
+	}
+	b, err := json.MarshalIndent(sm, "", "  ")
+	if err != nil {
+		log.Println(err)
+	}
+	log.Println(string(b))
+}
+
+func saga() {
+	saga := &Saga{
+		StateMachine: NewStateMachine("0"),
+	}
+	createOrder := func() error {
+		// ORDER_CREATED
+		log.Println("create order")
+		return nil
+	}
+	createPayment := func() error {
+		// ORDER_CREATED
+		log.Println("create payment")
+		return errors.New("payment failed")
+	}
+	cancelOrder := func() error {
+		// PAYMENT_CANCELLED
+		log.Println("cancel order")
+		return nil
+	}
+	createDelivery := func() error {
+		// PAYMENT_CREATED
+		log.Println("create delivery")
+		// return errors.New("create delivery failed")
+		return nil
+	}
+	cancelPayment := func() error {
+		// DELIVERY_CANCELLED
+		log.Println("cancel payment")
+		return nil
+	}
+	confirmOrder := func() error {
+		// DELIVERY_CREATED
+		log.Println("confirm order")
+		// return errors.New("order not confirmed")
+		return nil
+	}
+	cancelDelivery := func() error {
+		// ORDER REJECTED
+		log.Println("cancel delivery")
+		return nil
+	}
+	done := func() error {
+		// ORDER_CONFIRMED
+		log.Println("done")
+		return nil
+	}
+	noop := func() error {
+		return nil
+	}
+
+	saga.Add(createOrder, cancelOrder)
+	saga.Add(createPayment, cancelPayment)
+	saga.Add(createDelivery, cancelDelivery)
+	saga.Add(confirmOrder, noop)
+	saga.Add(done, noop)
+
+	for !saga.Done() {
+		if err := saga.Do(); err != nil {
+			log.Println(err)
+		}
+	}
+
+	b, err := json.Marshal(saga)
+	if err != nil {
+		log.Println(err)
+	}
+	log.Println(string(b))
+}
+
+type Saga struct {
+	*StateMachine
+	Step     int
+	Progress int
+	Logs     []string
+}
+
+func getFunctionName(i interface{}) string {
+	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
+}
+
+func (s *Saga) Add(tx func() error, c func() error) {
+	s.State(fmt.Sprint(s.Step)).Invoke(tx)
+	s.State(fmt.Sprint(s.Step + 1)).Invoke(c)
+	s.Step += 2
+}
+func (s *Saga) Done() bool {
+	return s.Progress < 0 || s.Progress > s.Step-1
+}
+
+func (s *Saga) Do() error {
+	if s.Done() {
+		return nil
+	}
+	if s.Progress&1 == 0 {
+		if err := s.Send(fmt.Sprint(s.Progress)); err != nil {
+			s.Progress -= 1
+			s.StateMachine.Initial = fmt.Sprint(s.Progress)
+			return err
+		}
+		s.Progress += 2
+		s.StateMachine.Initial = fmt.Sprint(s.Progress)
+		return nil
+	} else {
+		if err := s.Send(fmt.Sprint(s.Progress)); err != nil {
+			return err
+		}
+		s.Progress -= 2
+		s.StateMachine.Initial = fmt.Sprint(s.Progress)
+		return nil
+	}
+}
+```
