@@ -4,13 +4,14 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
 )
 
 func main() {
-	c := Chain{}.
+	c := Chain{ctx: context.Background()}.
 		Then(foo).
 		Then(bar)
 	if err := c.Err(); err != nil {
@@ -18,24 +19,25 @@ func main() {
 	}
 }
 
-func foo() error {
+func foo(ctx context.Context) error {
 	fmt.Println("calling foo")
 	return errors.New("foo")
 }
-func bar() error {
+func bar(ctx context.Context) error {
 	fmt.Println("calling bar")
 	return errors.New("bar")
 }
 
 type Chain struct {
+	ctx context.Context
 	err error
 }
 
-func (c Chain) Then(fn func() error) Chain {
+func (c Chain) Then(fn func(ctx context.Context) error) Chain {
 	if c.err != nil {
 		return c
 	}
-	c.err = fn()
+	c.err = fn(c.ctx)
 	return c
 }
 
