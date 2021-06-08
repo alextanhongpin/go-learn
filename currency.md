@@ -27,3 +27,29 @@ func main() {
 }
 
 ```
+
+## Another example
+
+```go
+package main
+
+import (
+	"golang.org/x/text/currency"
+	"golang.org/x/text/language"
+	"golang.org/x/text/language/display"
+	"golang.org/x/text/message"
+	"golang.org/x/text/number"
+)
+
+func main() {
+	n := display.Tags(language.English)
+	for _, lcode := range []string{"en_US", "pt_BR", "de", "ja", "hi"} {
+		lang := language.MustParse(lcode)
+		cur, _ := currency.FromTag(lang)
+		scale, _ := currency.Cash.Rounding(cur) // fractional digits
+		dec := number.Decimal(100000.00, number.Scale(scale))
+		p := message.NewPrinter(lang)
+		p.Printf("%24v (%v): %v%v\n", n.Name(lang), cur, currency.Symbol(cur), dec)
+	}
+}
+```
