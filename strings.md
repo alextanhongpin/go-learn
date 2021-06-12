@@ -134,7 +134,59 @@ func main() {
 }
 
 func match(src, tgt string) bool {
+	// A simpler way is to just match src == tgt without regex.
+	// However, using regex allows us to replace string more easily.
 	ok, _ := regexp.MatchString(fmt.Sprintf("\\b%s\\b", tgt), src)
 	return ok
+}
+```
+
+## Runes length
+Demonstrates that runes length are different than bytes.
+```go
+package main
+
+import (
+	"fmt"
+)
+
+func main() {
+	// len(s) vs len([]rune(s))
+	// ‘£’ takes two bytes as per UTF-8
+	fmt.Println(len("£"))
+	fmt.Println(len([]rune("£")))
+}
+```
+
+## Unicode Normalization
+
+For password, it is important to normalize them by using NFKD, so that they are treated the same regardless of what machine the user is on.
+```go
+package main
+
+import (
+	"fmt"
+
+	"golang.org/x/text/unicode/norm"
+)
+
+func main() {
+	// latin small letter e with acute
+	e1 := "\u00e9"
+	fmt.Println(e1)
+	fmt.Println([]byte(e1))
+	fmt.Println(norm.NFKC.Bytes([]byte(e1)))
+	fmt.Println(norm.NFKD.Bytes([]byte(e1)))
+	fmt.Println(len(e1))         // 2
+	fmt.Println(len([]rune(e1))) // 1
+
+	// latin small letter e followed by combining acute accent
+	e2 := "\u0065\u0301"
+	fmt.Println(e2)
+	fmt.Println([]byte(e2))
+	fmt.Println(norm.NFKC.Bytes([]byte(e2)))
+	fmt.Println(norm.NFKD.Bytes([]byte(e2)))
+	fmt.Println(len(e2))         // 3, a character can span multiple runes, len() return the number of bytes in a string
+	fmt.Println(len([]rune(e2))) // 2, this counts the actual length of the character
 }
 ```
