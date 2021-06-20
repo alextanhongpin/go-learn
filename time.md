@@ -284,3 +284,35 @@ func diff(a, b time.Time) (year, month, day, hour, min, sec int) {
 	return
 }
 ```
+
+
+## Skipping business days
+
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func main() {
+	start := time.Date(2021, 6, 20, 0, 0, 0, 0, time.Local)
+	fmt.Println("today is", start.Weekday())
+	delivered := estimateDelivery(start, 3)
+	fmt.Println("expected to receive on ", delivered.Weekday())
+}
+
+func estimateDelivery(start time.Time, days int) time.Time {
+	for days > 0 {
+		start = start.AddDate(0, 0, 1)
+		day := start.Weekday()
+		if day == time.Saturday || day == time.Sunday {
+			start = start.AddDate(0, 0, 1)
+		} else {
+			days--
+		}
+	}
+	return start
+}
+```
