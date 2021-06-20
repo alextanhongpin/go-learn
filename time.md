@@ -316,3 +316,38 @@ func estimateDelivery(start time.Time, days int) time.Time {
 	return start
 }
 ```
+
+Without loop:
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func main() {
+	now := time.Now().AddDate(0, 0, 3)
+	fmt.Println("Start", now.Weekday())
+	end := AddBusinessDays(now, 6)
+	fmt.Println(end.Weekday(), end)
+}
+
+// https://stackoverflow.com/questions/1044688/addbusinessdays-and-getbusinessdays
+func AddBusinessDays(start time.Time, days int) time.Time {
+	if start.Weekday() == time.Saturday {
+		start = start.AddDate(0, 0, 2)
+		days -= 1
+	} else if start.Weekday() == time.Sunday {
+		start = start.AddDate(0, 0, 1)
+		days -= 1
+	}
+	initialDayOfWeek := int(start.Weekday())
+	weeks := days / 5
+	addDays := days % 5
+	if addDays+initialDayOfWeek > 5 {
+		addDays += 2
+	}
+	return start.AddDate(0, 0, weeks*7+addDays)
+}
+```
