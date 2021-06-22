@@ -34,6 +34,33 @@ func main() {
 }
 
 ```
+This is the same:
+
+```go
+package main
+
+import (
+	"encoding/base64"
+	"encoding/hex"
+	"fmt"
+	"strings"
+
+	"github.com/google/uuid"
+)
+
+func main() {
+	//	id := uuid.New()
+	id := uuid.MustParse("123e4567-e89b-12d3-a456-426655440000")
+	fmt.Println(id)
+	b, _ := id.MarshalBinary()
+	fmt.Println(base64.StdEncoding.EncodeToString(b))
+	
+	// Same as...
+	b, _ = hex.DecodeString(strings.ReplaceAll(id.String(), "-", ""))
+	fmt.Println(fmt.Sprintf("%x", b))
+	fmt.Println(base64.StdEncoding.EncodeToString(b))
+}
+```
 
 References:
 - https://stackoverflow.com/questions/37934162/output-uuid-in-go-as-a-short-string
