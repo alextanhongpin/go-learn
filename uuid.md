@@ -62,5 +62,31 @@ func main() {
 }
 ```
 
+## Shorter cursor
+
+```go
+package main
+
+import (
+	"encoding/base64"
+	"encoding/hex"
+	"fmt"
+	"time"
+)
+
+func main() {
+	t := time.Now().UnixNano() // 1257894000000000000
+	s := fmt.Sprint(t)
+	fmt.Println(s)
+	// Good. Shorter hex.
+	b, _ := hex.DecodeString(s)
+	fmt.Println(base64.StdEncoding.EncodeToString(b)) // EleJQAAAAAAA
+	
+	// Bad. Longer string.
+	fmt.Println(base64.StdEncoding.EncodeToString([]byte(fmt.Sprint(t)))) // MTI1Nzg5NDAwMDAwMDAwMDAwMA==
+
+}
+```
+
 References:
 - https://stackoverflow.com/questions/37934162/output-uuid-in-go-as-a-short-string
