@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
 	"sync"
 	"time"
 
@@ -23,33 +24,37 @@ type Request struct {
 type Status int
 
 const (
-	Pending Status = iota
+	None Status = iota
+	Pending
 	Success
 	Failed
 )
 
 type Result struct {
+	key    string
 	val    interface{}
 	err    error
 	status Status
 }
 
 type Loader struct {
+	mu            sync.RWMutex
 	wg            sync.WaitGroup
-	mu            sync.Mutex
+	batchFn       BatchFn
+	cond          *sync.Cond
 	cache         map[string]Result
-	keys          []Request
-	keyCh         chan Request
 	batchDuration time.Duration
 	done          chan bool
 }
 
-func NewLoader() *Loader {
+type BatchFn func(ctx context.Context, keys []string) ([]Result, error)
+
+func NewLoader(batchFn BatchFn) *Loader {
 	l := &Loader{
-		cache:         make(map[string]Result),
-		keys:          make([]Request, 0),
-		keyCh:         make(chan Request),
+		batchFn:       batchFn,
 		batchDuration: 16 * time.Millisecond,
+		cache:         make(map[string]Result),
+		cond:          sync.NewCond(&sync.Mutex{}),
 		done:          make(chan bool),
 	}
 	go l.pool()
@@ -60,74 +65,126 @@ func (l *Loader) pool() {
 	for {
 		select {
 		case <-time.After(l.batchDuration):
-			l.batchFn()
-		case key := <-l.keyCh:
-			l.keys = append(l.keys, key)
+			l.batch()
 		case <-l.done:
 			return
 		}
 	}
 }
 
-func (l *Loader) batchFn() {
+func (l *Loader) batch() {
 	// Implement batch find here.
 	l.mu.Lock()
-	keys := l.keys
-	fmt.Println("batching", keys)
-	l.keys = make([]Request, 0)
-	l.mu.Unlock()
+	defer l.mu.Unlock()
 
-	// Get the unique keys (deduplicate)
-	// Find results for unique key.
-	// Group result by key
-	// For each key, return the result
-
-	for i, key := range keys {
-		key.ch <- Result{
-			val: Country{
-				ID:   fmt.Sprint(i),
-				Name: key.key,
-			},
-			status: Success,
+	var keys []string
+	for key := range l.cache {
+		result := l.cache[key]
+		if result.status == Pending {
+			keys = append(keys, key)
 		}
 	}
+	fmt.Println("batching", keys)
+
+	items, err := l.batchFn(context.Background(), keys)
+	if err != nil {
+		l.cond.L.Lock()
+		for _, key := range keys {
+			l.cache[key] = Result{
+				key:    key,
+				val:    nil,
+				err:    err,
+				status: Failed,
+			}
+		}
+		log.Println("broadcasting result 1")
+		l.cond.Broadcast()
+		l.cond.L.Unlock()
+		return
+	}
+
+	itemByID := make(map[string]Result)
+	for _, item := range items {
+		itemByID[item.key] = item
+	}
+
+	l.cond.L.Lock()
+	for _, key := range keys {
+		item, exists := itemByID[key]
+		if exists {
+			l.cache[key] = item
+		} else {
+			l.cache[key] = Result{
+				status: Failed,
+				err:    errors.New("does not exists"),
+				key:    key,
+			}
+		}
+	}
+	log.Println("broadcasting result 2")
+	l.cond.Broadcast()
+	l.cond.L.Unlock()
 }
 
 func (l *Loader) Load(key string) (interface{}, error) {
 	l.wg.Add(1)
 	defer l.wg.Done()
-	fmt.Println("load", key)
+
+	fmt.Println("Load", key)
+
+	// First, check if the key exists.
+	//l.mu.Lock()
+	//defer l.mu.Unlock()
+	l.mu.RLock()
+	result, exists := l.cache[key]
+	l.mu.RUnlock()
+
+	condition := func() bool {
+		l.mu.RLock()
+		result := l.cache[key]
+		l.mu.RUnlock()
+		return result.status == Pending
+	}
+
+	if exists {
+		if result.status == Success && result.status == Failed {
+			log.Println("cache hit true for", key)
+			return result.val, result.err
+		}
+
+		// L must be locked when waiting for the status to change.
+		l.cond.L.Lock()
+
+		log.Println("alraedy fetching, pending success")
+		for condition() {
+			l.cond.Wait()
+		}
+		// Obtain the latest status.
+		result = l.cache[key]
+		l.cond.L.Unlock()
+		return result.val, result.err
+	}
 
 	l.mu.Lock()
-	if result, exists := l.cache[key]; exists {
-		if result.status != Pending {
-			log.Println("cache hit", key)
-			l.mu.Unlock()
-			return result.val, result.err
-		} else {
-			log.Println("already fetching")
-		}
-	} else {
-		log.Println("not exist", key)
+	if _, exists := l.cache[key]; !exists {
 		l.cache[key] = Result{status: Pending}
 	}
 	l.mu.Unlock()
 
-	// Create a new channel to wait for the result.
-	ch := make(chan Result)
+	l.cond.L.Lock()
+	for condition() {
+		log.Println("waiting for status pending to change now...", l.cache[key])
+		l.cond.Wait()
+	}
 
-	// Send for batching.
-	l.keyCh <- Request{ch: ch, key: key}
+	l.mu.RLock()
+	result = l.cache[key]
+	l.mu.RUnlock()
 
-	// Receive the result of the channel (should include error)
-	out := <-ch
+	l.cond.L.Unlock()
+	fmt.Printf("Got result: %+v\n", result)
 
-	// Cache result.
-	l.mu.Lock()
-	l.cache[key] = out
-	l.mu.Unlock()
-
-	return out.val, out.err
+	return result.val, result.err
 }
 
 func (l *Loader) Close() {
@@ -136,9 +193,6 @@ func (l *Loader) Close() {
 }
 
 func main() {
-	u, _ := findUser(context.Background())
-	fmt.Println("user", u)
-
 	users, err := findUsers(context.Background(), 5)
 	if err != nil {
 		log.Fatalln(err)
@@ -147,53 +201,32 @@ func main() {
 }
 
 type Country struct {
-	ID   string
+	ID   int64
 	Name string
 }
 type User struct {
-	CountryID string
+	CountryID int64
 	Country   Country
-}
-
-func preloadUserCountry(ctx context.Context, users []User) ([]User, error) {
-	mapByCountryID := make(map[string]bool)
-	for _, user := range users {
-		mapByCountryID[user.CountryID] = true
-	}
-	var ids []string
-	for id := range mapByCountryID {
-		ids = append(ids, id)
-	}
-
-	countries, err := findCountryByIDs(ctx, ids)
-	if err != nil {
-		return nil, err
-	}
-	countryByID := make(map[string]Country)
-	for _, country := range countries {
-		countryByID[country.ID] = country
-	}
-
-	for i := range users {
-		users[i].Country = countryByID[users[i].CountryID]
-	}
-
-	return users, nil
-}
-
-func findUser(ctx context.Context) (User, error) {
-	var u User
-	users, err := preloadUserCountry(ctx, []User{u})
-	if err != nil {
-		return User{}, err
-	}
-	return users[0], nil
 }
 
 func findUsers(ctx context.Context, n int) ([]User, error) {
 	users := make([]User, n)
-	users[0].CountryID = "1"
-	l := NewLoader()
+	l := NewLoader(func(ctx context.Context, keys []string) ([]Result, error) {
+		countries, err := findCountryByIDs(ctx, keys)
+		if err != nil {
+			return nil, err
+		}
+		result := make([]Result, len(keys))
+		for i, country := range countries {
+			result[i] = Result{
+				val:    country,
+				key:    fmt.Sprint(country.ID),
+				err:    nil,
+				status: Success,
+			}
+		}
+		return result, nil
+	})
 	defer l.Close()
 
 	g := new(errgroup.Group)
@@ -209,15 +242,17 @@ func findUsers(ctx context.Context, n int) ([]User, error) {
 				duration = 40 * time.Millisecond
 			}
 			time.Sleep(duration)
-			c, err := l.Load(users[i].CountryID + fmt.Sprint(i))
+			var n int
+			if i < 3 {
+				n = 1
+			} else {
+				n = 2
+			}
+			c, err := l.Load(fmt.Sprint(n))
 			if err != nil {
 				return err
 			}
 			users[i].Country, _ = c.(Country)
-			if i == 1 {
-				fmt.Println("is it exiting?")
-				return errors.New("bad")
-			}
 			return nil
 		})
 	}
@@ -227,10 +262,14 @@ func findUsers(ctx context.Context, n int) ([]User, error) {
 	return users, nil
 }
 
-func findCountry(ctx context.Context, id string) (Country, error) {
+func findCountry(ctx context.Context, id int64) (Country, error) {
 	switch id {
-	case "1":
+	case 1:
 		return Country{ID: id, Name: "Malaysia"}, nil
+	case 2:
+		return Country{ID: id, Name: "Singapore"}, nil
+	case 3:
+		return Country{ID: id, Name: "Japan"}, nil
 	default:
 		return Country{ID: id, Name: "None"}, nil
 	}
@@ -239,9 +278,13 @@ func findCountry(ctx context.Context, id string) (Country, error) {
 func findCountryByIDs(ctx context.Context, ids []string) ([]Country, error) {
 	// In SQL, this will be an IN statement.
 	countries := make([]Country, len(ids))
-	var err error
+
 	for i, id := range ids {
-		countries[i], err = findCountry(ctx, id)
+		countryID, err := strconv.ParseInt(id, 10, 64)
+		if err != nil {
+			panic(err)
+		}
+		countries[i], err = findCountry(ctx, countryID)
 		if err != nil {
 			return nil, err
 		}
