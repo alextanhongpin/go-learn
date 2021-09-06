@@ -114,3 +114,56 @@ func (c Chain) Err() error {
 	return c.err
 }
 ```
+
+
+## Map
+
+```go
+package main
+
+import (
+	"errors"
+	"fmt"
+)
+
+func main() {
+
+	incrby1 := func(p *Processor) error {
+		p.value += 1
+		return nil
+	}
+
+	incrby10 := func(p *Processor) error {
+		p.value += 10
+		return nil
+	}
+	
+	badChain := func(p *Processor) error {
+		p.value += 5
+		return errors.New("bad chain")
+	}
+	
+	newproc := Processor{}.
+		Map(incrby1).
+		Map(incrby10).
+		Map(badChain)
+	fmt.Println(newproc.value)
+}
+
+type Processor struct {
+	value int
+	err   error
+}
+
+func (p Processor) Map(fn func(*Processor) error) Processor {
+	if p.err != nil {
+		return p
+	}
+	cp := p
+	if err := fn(&cp); err != nil {
+		p.err = err
+		return p
+	}
+	return cp
+}
+```
