@@ -88,5 +88,51 @@ func main() {
 }
 ```
 
+## With Satori
+
+```go
+package main
+
+import (
+	"encoding/base64"
+	"fmt"
+
+	uuid "github.com/satori/go.uuid"
+)
+
+func main() {
+	id := uuid.NewV4()
+	shortID := encodeUUID(id)
+	longID, err := decodeUUID(shortID)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("ori\t:", id, len(id))
+	fmt.Println("short\t:", shortID, len(shortID))
+	fmt.Println("long\t:", longID, len(longID))
+}
+
+func encodeUUID(id uuid.UUID) string {
+	return base64.RawURLEncoding.EncodeToString(id.Bytes())
+}
+
+func decodeUUID(str string) (uuid.UUID, error) {
+	h, err := base64.RawURLEncoding.DecodeString(str)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return uuid.FromBytes(h)
+}
+```
+
+Output
+```
+ori	: fc9b3c39-5220-4583-ae6f-61f550fcc45d 16
+short	: _Js8OVIgRYOub2H1UPzEXQ 22
+long	: fc9b3c39-5220-4583-ae6f-61f550fcc45d 16
+
+Program exited.
+```
+
 References:
 - https://stackoverflow.com/questions/37934162/output-uuid-in-go-as-a-short-string
