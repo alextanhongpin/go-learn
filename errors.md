@@ -269,3 +269,120 @@ func fakeSearch(kind string) Search {
 	}
 }
 ```
+
+## Building Error
+
+When creating custom errors, there are useful fields to define
+- code: a unique error code, e.g. `user.invalidName` that can be used for localization etc. It is actually the error `id`, but somehow `code` is more often associated with error than `id`
+- metadata: the additional information to be passed down for constructing a more meaningful error message. The data is not always known during compile time such as min/max value, and may only be known during run-time. They can be made optional or required. If optional, the client must handle the scenario where the data is not provided.
+- kind: a grouping for errors, e.g. `not found`, `created`, `conflict`, etc. This could be for example be mapped to HTTP status codes at the API layer
+- message: a readable human error message, usually for logging purposes, and different from application errors that requires translation
+
+```go
+package main
+
+import (
+	"errors"
+	"fmt"
+)
+
+// Overriding the interface ensures that the `Build` method must be called.
+var ErrNameTooLong ErrorBuilder = NewError("user.invalidName", "Name is too long")
+
+// This makes the Build() method optional.
+var ErrNameIsRequired = NewError("user.nameIsRequired", "Name is required")
+
+type ErrorBuilder interface {
+	Build(metadata map[string]interface{}) error
+}
+
+func NewError(id, msg string) *Error {
+	return &Error{id: id, message: msg}
+}
+
+type Error struct {
+	id       string
+	message  string
+	metadata map[string]interface{}
+}
+
+// Build uses a value receiver to avoid mutating the original error.
+// It returns a pointer receiver, so that the errors.As can be fulfilled.
+func (e Error) Build(metadata map[string]interface{}) error {
+	e.metadata = metadata
+	return &e
+}
+
+func (e *Error) Is(other error) bool {
+	err, ok := other.(*Error)
+	if !ok {
+		return false
+	}
+	return e.id == err.id
+}
+
+func (e Error) Error() string {
+	return e.message
+}
+
+func main() {
+	errorMatch()
+	errorDoesNotMatch()
+	errorBuild()
+	errorIsSentinel()
+}
+
+func errorMatch() {
+	err := &Error{message: "bad request"}
+
+	var e *Error
+	if errors.As(err, &e) {
+		fmt.Println("match", e)
+	} else {
+		fmt.Println("not match")
+	}
+}
+
+func errorDoesNotMatch() {
+	err2 := errors.New("hello")
+	var e *Error
+	if errors.As(err2, &e) {
+		fmt.Println("match", e)
+	} else {
+		fmt.Println("not match")
+	}
+}
+
+func errorBuild() {
+	err := ErrNameTooLong.Build(map[string]interface{}{
+		"name": "john",
+	})
+	var e *Error
+	if errors.As(err, &e) {
+		fmt.Println("match", e, e.metadata)
+	} else {
+		fmt.Println("not match")
+	}
+
+	// The original error remains immutable.
+	fmt.Printf("%#v\n", ErrNameTooLong)
+}
+
+func errorIsSentinel() {
+	err := ErrNameTooLong.Build(map[string]interface{}{
+		"name": "john",
+	})
+	if errors.Is(err, ErrNameTooLong.Build(nil)) {
+		fmt.Println("match", err)
+	} else {
+		fmt.Println("not match")
+	}
+
+	err = ErrNameIsRequired
+	if errors.Is(err, ErrNameIsRequired) {
+		fmt.Println("match", err)
+	} else {
+		fmt.Println("not match")
+	}
+}
+```
