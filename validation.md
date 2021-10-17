@@ -129,3 +129,68 @@ func main() {
 	}
 }
 ```
+
+
+## Validation 
+
+How can we keep our data separate from behaviours? The advantage of programming is it is flexible. However, sometimes we just want to ensure that validation could be represented as a data instead of code.
+
+Also for errors, most of the time, we want to
+1) identify exactly what happens through a meaningful error code
+2) pass additional data down to construct more meaningful error messages (as well as localization)
+3) validation may depend on external dependencies (another entity, some external infrastructure, service or third-party APIs)
+
+```go
+package main
+
+import (
+	"errors"
+	"fmt"
+)
+
+var ErrNameTooLong = errors.New("user.nameTooLong")
+var ErrNameIsRequired = errors.New("user.nameIsRequired")
+
+type User struct {
+	Name string
+	Age  int
+}
+
+// Using interface without arguments in function keeps the method as generic as possible.
+type Validator interface {
+	Validate() error
+}
+
+type UserNameValidator struct {
+	user *User
+}
+
+func (v *UserNameValidator) Validate() error {
+	isEmpty := v.user.Name == ""
+	isTooLong := len(v.user.Name) > 100
+
+	switch {
+	case isEmpty:
+		return ErrNameIsRequired
+	case isTooLong:
+		return ErrNameTooLong
+	default:
+		return nil
+	}
+}
+
+func main() {
+	u := &User{Name: "John"}
+	validators := []Validator{
+		&UserNameValidator{u},
+		// TODO: Add validator that can backfill empty values.
+	}
+	for _, v := range validators {
+		if err := v.Validate(); err != nil {
+			panic(err)
+		}
+	}
+	fmt.Println("Hello, playground")
+}
+
+```
