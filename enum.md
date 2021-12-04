@@ -161,13 +161,25 @@ var (
 	DirectionTypeUp = DirectionType(Direction.MustGet("Up"))
 )
 
+// Same goes for string enum.
+type DirectionString string
+
+var (
+	DirectionStrDown = DirectionString(Direction.Check("Down"))
+)
+
 func main() {
 	fmt.Println(Direction.Is("Up"), Direction.Is(0), Direction.Is(1))
 	fmt.Println(DirectionTypeUp)
 	PrintDirection(DirectionTypeUp)
+	PrintDirectionString(DirectionStrDown)
 }
 
 func PrintDirection(dir DirectionType) {
+	fmt.Println(dir)
+}
+
+func PrintDirectionString(dir DirectionString) {
 	fmt.Println(dir)
 }
 
@@ -181,6 +193,13 @@ type Enums struct {
 
 func (e Enums) Name() string {
 	return e.name
+}
+
+func (e Enums) Check(s string) string {
+	if !e.Is(s) {
+		panic(fmt.Sprintf("%s: %q is invalid", e.name, s))
+	}
+	return s
 }
 
 func (e Enums) Is(v interface{}) bool {
