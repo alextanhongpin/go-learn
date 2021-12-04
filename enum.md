@@ -147,10 +147,28 @@ import (
 	"strings"
 )
 
-var Direction = NewEnum("direction", `Up Down Left Right`)
+var Direction = NewEnum("Direction", `Up Down Left Right`)
+
+// If we really need a value object, map them.
+type DirectionType int
+
+func (t DirectionType) String() string {
+	return Direction.MustAt(int(t))
+}
+
+// However, we cannot use it as const.
+var (
+	DirectionTypeUp = DirectionType(Direction.MustGet("Up"))
+)
 
 func main() {
 	fmt.Println(Direction.Is("Up"), Direction.Is(0), Direction.Is(1))
+	fmt.Println(DirectionTypeUp)
+	PrintDirection(DirectionTypeUp)
+}
+
+func PrintDirection(dir DirectionType) {
+	fmt.Println(dir)
 }
 
 type Enum int
@@ -189,7 +207,43 @@ func (e Enums) isString(s string) bool {
 	return false
 }
 
+func (e Enums) At(n int) (string, bool) {
+	v, ok := e.value[Enum(n)]
+	return v, ok
+}
+
+func (e Enums) MustAt(n int) string {
+	s, ok := e.At(n)
+	if !ok {
+		panic(fmt.Sprintf("%s: %d does not exist", e.name, n))
+	}
+	return s
+}
+
+func (e Enums) Get(s string) (int, bool) {
+	for k, v := range e.value {
+		if v == s {
+			return int(k), true
+		}
+	}
+	return -1, false
+}
+
+func (e Enums) MustGet(s string) int {
+	v, ok := e.Get(s)
+	if !ok {
+		panic(fmt.Sprintf("%s: %q does not exist", e.name, s))
+	}
+	return v
+}
+
 func NewEnum(name, in string) Enums {
+	if len(name) == 0 {
+		panic("enum: constructor requires name")
+	}
+	if len(in) == 0 {
+		panic("enum: constructor requires enum list")
+	}
 	enums := strings.Fields(strings.TrimSpace(in))
 	min, max := 1, 0
 	value := make(map[Enum]string)
@@ -204,4 +258,5 @@ func NewEnum(name, in string) Enums {
 		value: value,
 	}
 }
+
 ```
