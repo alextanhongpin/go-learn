@@ -153,24 +153,26 @@ var Direction = NewEnum("Direction", `Up Down Left Right`)
 type DirectionType int
 
 func (t DirectionType) String() string {
-	return Direction.MustAt(int(t))
+	return Direction.FromInt(int(t))
 }
 
 // However, we cannot use it as const.
 var (
-	DirectionTypeUp = DirectionType(Direction.MustGet("Up"))
+	DirectionTypeUp = DirectionType(Direction.FromString("Up"))
 )
 
 // Same goes for string enum.
 type DirectionString string
 
 var (
-	DirectionStrDown = DirectionString(Direction.Check("Down"))
+	DirectionStrDown = DirectionString(Direction.MustString("Down"))
 )
 
 func main() {
 	fmt.Println(Direction.Is("Up"), Direction.Is(0), Direction.Is(1))
 	fmt.Println(DirectionTypeUp)
+	fmt.Println(Direction.At(4))
+	fmt.Println(Direction.Of("Left"))
 	PrintDirection(DirectionTypeUp)
 	PrintDirectionString(DirectionStrDown)
 }
@@ -193,13 +195,6 @@ type Enums struct {
 
 func (e Enums) Name() string {
 	return e.name
-}
-
-func (e Enums) Check(s string) string {
-	if !e.Is(s) {
-		panic(fmt.Sprintf("%s: %q is invalid", e.name, s))
-	}
-	return s
 }
 
 func (e Enums) Is(v interface{}) bool {
@@ -231,15 +226,7 @@ func (e Enums) At(n int) (string, bool) {
 	return v, ok
 }
 
-func (e Enums) MustAt(n int) string {
-	s, ok := e.At(n)
-	if !ok {
-		panic(fmt.Sprintf("%s: %d does not exist", e.name, n))
-	}
-	return s
-}
-
-func (e Enums) Get(s string) (int, bool) {
+func (e Enums) Of(s string) (int, bool) {
 	for k, v := range e.value {
 		if v == s {
 			return int(k), true
@@ -248,12 +235,30 @@ func (e Enums) Get(s string) (int, bool) {
 	return -1, false
 }
 
-func (e Enums) MustGet(s string) int {
-	v, ok := e.Get(s)
-	if !ok {
+func (e Enums) MustInt(n int) int {
+	if !e.Is(n) {
+		panic(fmt.Sprintf("%s: %d does not exist", e.name, n))
+	}
+	return n
+}
+
+func (e Enums) MustString(s string) string {
+	if !e.Is(s) {
 		panic(fmt.Sprintf("%s: %q does not exist", e.name, s))
 	}
-	return v
+	return s
+}
+
+func (e Enums) FromInt(n int) string {
+	_ = e.MustInt(n)
+	s, _ := e.At(n)
+	return s
+}
+
+func (e Enums) FromString(s string) int {
+	_ = e.MustString(s)
+	n, _ := e.Of(s)
+	return n
 }
 
 func NewEnum(name, in string) Enums {
@@ -277,5 +282,4 @@ func NewEnum(name, in string) Enums {
 		value: value,
 	}
 }
-
 ```
