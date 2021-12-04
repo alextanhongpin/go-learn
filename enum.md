@@ -137,6 +137,13 @@ func main() {
 
 ## Loading Enums in runtime
 
+Why load errors in runtime?
+
+- can be loaded from external sources (through `go:embed`, or from database mapping for example)
+- consistent int assignment, and don't need to manually map int to string
+
+
+
 ```go
 // You can edit this code!
 // Click here and start typing.
