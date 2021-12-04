@@ -132,3 +132,76 @@ func main() {
 	}
 }
 ```
+
+
+
+## Loading Enums in runtime
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"fmt"
+	"strings"
+)
+
+var Direction = NewEnum("direction", `Up Down Left Right`)
+
+func main() {
+	fmt.Println(Direction.Is("Up"), Direction.Is(0), Direction.Is(1))
+}
+
+type Enum int
+
+type Enums struct {
+	name     string
+	min, max int
+	value    map[Enum]string
+}
+
+func (e Enums) Name() string {
+	return e.name
+}
+
+func (e Enums) Is(v interface{}) bool {
+	switch i := v.(type) {
+	case string:
+		return e.isString(i)
+	case int:
+		return e.isInt(i)
+	default:
+		panic("invalid type")
+	}
+}
+
+func (e Enums) isInt(n int) bool {
+	return n >= e.min && n <= e.max
+}
+
+func (e Enums) isString(s string) bool {
+	for k := range e.value {
+		if e.value[k] == s {
+			return true
+		}
+	}
+	return false
+}
+
+func NewEnum(name, in string) Enums {
+	enums := strings.Fields(strings.TrimSpace(in))
+	min, max := 1, 0
+	value := make(map[Enum]string)
+	for i, e := range enums {
+		max = min + i
+		value[Enum(max)] = strings.TrimSpace(e)
+	}
+	return Enums{
+		name:  name,
+		min:   min,
+		max:   max,
+		value: value,
+	}
+}
+```
