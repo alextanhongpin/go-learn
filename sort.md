@@ -53,6 +53,8 @@ func main() {
 		lhs, rhs := users[i], users[j]
 		byAge := lhs.Age - rhs.Age
 		byName := strings.Compare(lhs.Name, rhs.Name) // Returns 0 if equal, -1 if lhs is less than rhs, and 1 if lhs is greater than rhs
+		
+		// The + sign is not necessary, but adds clarity as it means increasing in value, aka ascending.
 		// sortBy(+byAge, +byName) // Sort by age asc, by name asc
 		// sortBy(-byAge, +byName) // Sort by age desc, by name asc
 		// sortBy(+byName, +byAge) // Sort by name asc, by name asc
