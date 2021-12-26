@@ -57,7 +57,7 @@ func main() {
 		// The + sign is not necessary, but adds clarity as it means increasing in value, aka ascending.
 		// sortBy(+byAge, +byName) // Sort by age asc, by name asc
 		// sortBy(-byAge, +byName) // Sort by age desc, by name asc
-		// sortBy(+byName, +byAge) // Sort by name asc, by name asc
+		// sortBy(+byName, +byAge) // Sort by name asc, by age asc
 		return sortBy(-byAge, -byName) // Sort by age desc, by name desc
 	})
 	fmt.Println(users)
