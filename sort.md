@@ -72,3 +72,51 @@ func sortBy(sc ...int) bool {
 	return sc[len(sc)-1] < 0
 }
 ```
+
+## Reverse sort
+
+Reverse the slice. Note that this is different than sorting in ascending or descending order (see below for descending sort).
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"fmt"
+	"sort"
+)
+
+func main() {
+	n := []int64{1, 2, 5, 6, 4}
+	sort.Slice(n, func(i, j int) bool {
+		return true
+	})
+	fmt.Println(n)
+
+	s := []string{"a", "b", "c", "k", "d"}
+	sort.Slice(s, func(i, j int) bool {
+		return true
+	})
+	fmt.Println(s)
+}
+```
+
+
+Sort descending:
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"fmt"
+	"sort"
+)
+
+func main() {
+	keys := []int{3, 2, 8, 1}
+	sort.Sort(sort.Reverse(sort.IntSlice(keys)))
+	fmt.Println(keys)
+}
+```
