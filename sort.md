@@ -120,3 +120,44 @@ func main() {
 	fmt.Println(keys)
 }
 ```
+
+## Partitioning with sort
+
+
+Say if you have a list of items with id and stock counts, and some of them are _out of stock_. You want to show the out of stock items first (or last, depending on your requirements). There are many ways to do it, such as filtering them and combining them later etc, but most of the time, you want to preserve the order of the existing stock counts. 
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"fmt"
+	"sort"
+)
+
+func main() {
+	items := []item{
+		{1, 0},
+		{2, 10},
+		{3, 30},
+		{4, 30},
+		{5, 0},
+		{6, 5},
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		return items[i].count == 0 && items[j].count != 0
+	})
+	fmt.Println(items) // [{1 0} {5 0} {2 10} {3 30} {4 30} {6 5}]
+
+	sort.SliceStable(items, func(i, j int) bool {
+		return items[i].count != 0 && items[j].count == 0
+	})
+	fmt.Println(items) // [{2 10} {3 30} {4 30} {6 5} {1 0} {5 0}]
+}
+
+type item struct {
+	id    int64
+	count int64
+}
+```
