@@ -1,3 +1,6 @@
+Usecases
+- distributing rewards - we don't want to give the highest tier equally to just about everyone. 
+
 ```go
 // You can edit this code!
 // Click here and start typing.
@@ -66,3 +69,11 @@ func (rw *RouletteWheel) Choice() int64 {
 	return rw.value[len(rw.value)-1]
 }
 ```
+
+
+References
+- https://rocreguant.com/roulette-wheel-selection-python/2019/
+- https://www.keithschwarz.com/darts-dice-coins/
+- https://en.wikipedia.org/wiki/Fitness_proportionate_selection
+- https://cybernetist.com/2019/01/24/random-weighted-draws-in-go/
+- https://dev.to/trekhleb/weighted-random-algorithm-in-javascript-1pdc
