@@ -19,24 +19,28 @@ func main() {
 	equalDistributions := []int64{1, 1, 1, 1, 1}
 
 	// When the distribution is weighted, users that spins the wheel has a higher change to hit the reward with the higher weight.
-	// So in this example, users are more likely to earn 60 SGD than 100 SGD.
-	weightedDistributions := []int64{5, 10, 20, 2, 1}
+	// So in this example, users are more likely to earn 40 SGD than 100 SGD.
+	weightedDistributions := []int64{15, 20, 15, 2, 1}
 
 	printRewardDistribution(rewards, equalDistributions)
 	printRewardDistribution(rewards, weightedDistributions)
 }
 
 func printRewardDistribution(rewards, distributions []int64) {
+	fmt.Println("Rewards:", rewards)
+	fmt.Println("Distributions:", distributions)
 	w := NewRouletteWheel(rewards, distributions)
 	counter := make(map[int64]int64)
 	for i := 0; i < 10000; i++ {
 		got := w.Choice()
 		counter[got]++
 	}
-
+	var totalReward int64
 	for _, r := range rewards {
 		fmt.Println(r, "SGD:", counter[r])
+		totalReward += counter[r] * r
 	}
+	fmt.Println("Total reward:", totalReward)
 	fmt.Println()
 }
 
@@ -68,6 +72,7 @@ func (rw *RouletteWheel) Choice() int64 {
 	}
 	return rw.value[len(rw.value)-1]
 }
+
 ```
 
 
