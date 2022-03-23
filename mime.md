@@ -31,3 +31,25 @@ func main() {
 	fmt.Println("filetype:", fileType)
 }
 ```
+
+## Validating mime type
+
+Just check if the value returned is zero.
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"fmt"
+	"mime"
+)
+
+func main() {
+	v, err := mime.ExtensionsByType("image/svg+xml")
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(v)
+}
+```
