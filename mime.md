@@ -53,3 +53,48 @@ func main() {
 	fmt.Println(v)
 }
 ```
+
+
+## Getting image extension from valid mime type
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"errors"
+	"fmt"
+	"mime"
+	"strings"
+)
+
+func main() {
+	mimeType := "image/s/svg"
+	v, err := extensionByType(mimeType)
+	if err != nil {
+		fmt.Println(fmt.Errorf("%w: invalid mime type %q", err, mimeType))
+	}
+	fmt.Println(v)
+}
+
+var ErrExtensionNotFound = errors.New("extension not found")
+
+func extensionByType(mimeType string) (extension string, err error) {
+	if !strings.HasPrefix(mimeType, "image/") {
+		return "", ErrExtensionNotFound
+	}
+	v, err := mime.ExtensionsByType(mimeType)
+	if err != nil {
+		return "", fmt.Errorf("%w: %s", ErrExtensionNotFound, err)
+	}
+	if len(v) != 1 {
+		t := strings.Join(v, ", ")
+		if t == "" {
+			t = "none"
+		}
+		return "", fmt.Errorf("%w: %s", ErrExtensionNotFound, t)
+	}
+	return v[0], nil
+}
+```
