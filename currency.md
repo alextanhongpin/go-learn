@@ -53,3 +53,54 @@ func main() {
 	}
 }
 ```
+
+
+## Calculations
+
+Don't use float, use dedicated library:
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"fmt"
+
+	"github.com/shopspring/decimal"
+)
+
+func main() {
+	money := 45.1235
+
+	fmt.Println(isPreciseStd(money, 2))
+	fmt.Println(isPreciseStd(money, 4)) // Note that we already have precision error here ...
+	fmt.Println(isPrecise(money, 2))
+	fmt.Println(isPrecise(money, 4))
+
+	v := decimal.NewFromFloat(money)
+	fmt.Println(v.RoundCash(10))
+	fmt.Println(v.RoundBank(4))
+}
+
+func isPrecise(f float64, decimals int) bool {
+	v := decimal.NewFromFloat(f)
+	return v == v.Round(int32(decimals))
+}
+
+// Don't use this, it's not accurate.
+func isPreciseStd(f float64, decimals int) bool {
+	p := float64(tenPower(decimals))
+	// With 45.1234, we have precision error here ...
+	// 45.1234 == 45.1233
+	return f == float64(int(f*p))/p
+}
+
+func tenPower(n int) int {
+	res := 1
+	for i := 0; i < n; i++ {
+		res *= 10
+	}
+	return res
+}
+```
