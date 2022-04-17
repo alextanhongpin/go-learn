@@ -189,12 +189,29 @@ func main() {
 	for _, r := range runes {
 		fmt.Print(string(r), " ")
 	}
+	fmt.Println()
+	
+	// For maps, implement it differently
+	m1 := map[string]string{"a": "1"}
+	m2 := map[string]string{"b": "2"}
+	m3 := map[string]string{"c": "3"}
+	maps := []map[string]string{m1, m2, m3}
+	reverse(maps)
+	fmt.Println(maps)
 }
 
 func ReverseSlice[T comparable](s []T) {
 	sort.SliceStable(s, func(i, j int) bool {
 		return i > j
 	})
+}
+
+func reverse(s interface{}) {
+	n := reflect.ValueOf(s).Len()
+	swap := reflect.Swapper(s)
+	for i, j := 0, n-1; i < j; i, j = i+1, j-1 {
+		swap(i, j)
+	}
 }
 ```
 
@@ -203,5 +220,6 @@ Output:
 [-1 100 1 20 15 5 10]
 [world hello]
 d l r o w o l l e h 
+[map[c:3] map[b:2] map[a:1]]
 Program exited.
 ```
