@@ -161,3 +161,47 @@ type item struct {
 	count int64
 }
 ```
+
+
+## Reversing generic slice
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"fmt"
+	"sort"
+)
+
+func main() {
+	nums := []int64{10, 5, 15, 20, 1, 100, -1}
+	ReverseSlice(nums)
+	fmt.Println(nums)
+
+	strs := []string{"hello", "world"}
+	ReverseSlice(strs)
+	fmt.Println(strs)
+
+	runes := []rune{'h', 'e', 'l', 'l', 'o', 'w', 'o', 'r', 'l', 'd'}
+	ReverseSlice(runes)
+	for _, r := range runes {
+		fmt.Print(string(r), " ")
+	}
+}
+
+func ReverseSlice[T comparable](s []T) {
+	sort.SliceStable(s, func(i, j int) bool {
+		return i > j
+	})
+}
+```
+
+Output:
+```
+[-1 100 1 20 15 5 10]
+[world hello]
+d l r o w o l l e h 
+Program exited.
+```
