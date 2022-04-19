@@ -370,3 +370,42 @@ func IsZero(i interface{}) bool {
 	return !v.IsValid() || reflect.DeepEqual(v.Interface(), reflect.Zero(v.Type()).Interface())
 }
 ```
+
+## Getting field/value
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"fmt"
+	"reflect"
+)
+
+type User struct {
+	Name string `field:"name"`
+	Age  int64  `field:"age"`
+}
+
+func main() {
+	u := &User{}
+	t := reflect.TypeOf(u)
+	if reflect.ValueOf(u).Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+
+	switch t.Kind() {
+	case reflect.Struct:
+		for i := 0; i < t.NumField(); i++ {
+			f := t.Field(i)
+			fmt.Println("tag", f.Tag.Get("field"))
+
+			fmt.Println("name", f.Name)
+			fmt.Println("type", f.Type)
+			fmt.Println("kind", f.Type.Kind() == reflect.String)
+			fmt.Println()
+		}
+	}
+}
+```
