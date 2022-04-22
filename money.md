@@ -81,12 +81,18 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"sort"
 )
 
 func main() {
-	m := NewMoney(1300, 100)
+	m := NewMoney(1345, 100)
 	fmt.Println(m.AllocateEqual(3))
-	fmt.Println(m.AllocateRatio(1, 2, 3)) // NOTE: The order matters - the last one will always be +/- 1 Rp.
+	fmt.Println(m.AllocateRatio(1, 2, 1))
+	fmt.Println(m.AllocateMapRatio(map[int64]int64{
+		1000: 1,
+		2000: 2,
+		3000: 1,
+	}))
 }
 
 type Money struct {
@@ -143,6 +149,27 @@ func (m Money) AllocateRatio(ratios ...int64) []int64 {
 		lastAmount -= i64 * m.unit
 	}
 	res[len(ratios)-1] = lastAmount
+	return res
+}
+
+func (m Money) AllocateMapRatio(mapRatios map[int64]int64) map[int64]int64 {
+	var keys []int64
+	for k := range mapRatios {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return keys[i] < keys[j]
+	})
+	values := make([]int64, len(keys))
+	for i, k := range keys {
+		values[i] = mapRatios[k]
+	}
+	allocations := m.AllocateRatio(values...)
+
+	res := make(map[int64]int64)
+	for i, k := range keys {
+		res[k] = allocations[i]
+	}
 	return res
 }
 ```
