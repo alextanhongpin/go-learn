@@ -109,3 +109,161 @@ func main() {
 	fmt.Println("Hello, 世界")
 }
 ```
+
+Using atomic
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"fmt"
+	"math/big"
+	"sort"
+	"sync"
+	"sync/atomic"
+	"time"
+)
+
+type Every struct {
+	Seconds   int64
+	Threshold int64
+}
+
+type Snapshotter struct {
+	unix      int64
+	counter   int64
+	every     []Every
+	deltaTick int64
+	done      chan bool
+	callback  func()
+}
+
+func NewSnapshotter(every []Every, callback func()) (*Snapshotter, func()) {
+	if len(every) == 0 {
+		panic("initialized without periods")
+	}
+
+	sort.Slice(every, func(i, j int) bool {
+		return every[i].Seconds < every[j].Seconds
+	})
+
+	thresholds := make([]int64, len(every))
+	for i, e := range every {
+		thresholds[i] = e.Threshold
+	}
+
+	sort.Slice(thresholds, func(i, j int) bool {
+		return thresholds[i] > thresholds[j]
+	})
+	for i, e := range every {
+		if thresholds[i] != e.Threshold {
+			panic("threshold must be in descending values")
+		}
+	}
+
+	deltaTick := big.NewInt(every[0].Seconds)
+	for _, e := range every[1:] {
+		deltaTick.GCD(nil, nil, deltaTick, big.NewInt(e.Seconds))
+	}
+
+	s := &Snapshotter{
+		unix:      time.Now().Unix(),
+		counter:   0,
+		every:     every,
+		deltaTick: deltaTick.Int64(),
+		done:      make(chan bool),
+		callback:  callback,
+	}
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		s.loop()
+	}()
+	var once sync.Once
+	return s, func() {
+		once.Do(func() {
+			close(s.done)
+			wg.Wait()
+		})
+	}
+}
+
+func (s *Snapshotter) isTriggered() bool {
+	lastUnix := atomic.LoadInt64(&s.unix)
+	elapsedSeconds := int64(time.Since(time.Unix(lastUnix, 0)).Seconds())
+
+	counter := s.Count()
+	for _, every := range s.every {
+		if elapsedSeconds < every.Seconds {
+			return false
+		}
+		// Execute at every given seconds, if the amount is at least the given threshold.
+		// Changing this to <= will hit the condition at least the given seconds with the given threshold.
+		if elapsedSeconds == every.Seconds {
+			if counter < every.Threshold {
+				return false
+			}
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Snapshotter) loop() {
+	t := time.NewTicker(time.Duration(s.deltaTick) * time.Second)
+	for {
+		select {
+		case <-t.C:
+			if s.isTriggered() {
+				s.callback()
+				atomic.StoreInt64(&s.counter, 0)
+				atomic.StoreInt64(&s.unix, time.Now().Unix())
+			}
+		case <-s.done:
+			return
+		}
+	}
+}
+
+func (s *Snapshotter) Inc() int64 {
+	return atomic.AddInt64(&s.counter, 1)
+}
+
+func (s *Snapshotter) Count() int64 {
+	return atomic.LoadInt64(&s.counter)
+}
+
+func main() {
+	s, close := NewSnapshotter([]Every{
+		{1, 10}, // Execute every 1 second if the count is at least 10
+		{2, 5},  // Execute every 2 second if the count is at least 5
+		// Second 3 and 4 won't be checked.
+		{5, 1}, // Execute every 5 second if the count is at least 1
+	}, func() {
+		fmt.Println("triggered")
+	})
+	defer close()
+
+	go func() {
+		time.Sleep(1 * time.Second)
+		fmt.Println("incrementing")
+		for i := 0; i < 5; i++ {
+			s.Inc()
+		}
+	}()
+
+	go func() {
+		time.Sleep(3 * time.Second)
+		fmt.Println("incrementing")
+		for i := 0; i < 5; i++ {
+			s.Inc()
+		}
+	}()
+
+	time.Sleep(10 * time.Second)
+	fmt.Println("Hello, 世界")
+}
+```
