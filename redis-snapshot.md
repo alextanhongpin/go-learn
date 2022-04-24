@@ -110,7 +110,13 @@ func main() {
 }
 ```
 
-Using atomic
+# Using atomic
+
+todo
+- reset method 
+- increment by n is useful (uint only)
+- time duration is clearer
+- counter should be uint
 
 ```go
 // You can edit this code!
