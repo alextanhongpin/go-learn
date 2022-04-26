@@ -58,3 +58,37 @@ func (s Set[T]) List() []T {
 	return result
 }
 ```
+
+## Generic Map
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import "fmt"
+
+type User struct {
+	Name string
+	Age  int
+}
+
+func main() {
+	users := []User{
+		{"John", 10},
+		{"Jane", 20},
+	}
+	ages := mapR(users, func(u User) int {
+		return u.Age
+	})
+	fmt.Println(ages)
+}
+
+func mapR[T any, R any](in []T, fn func(T) R) []R {
+	res := make([]R, len(in))
+	for i, k := range in {
+		res[i] = fn(k)
+	}
+	return res
+}
+```
