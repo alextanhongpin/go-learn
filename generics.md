@@ -123,4 +123,51 @@ func Value[T any](t *T) (T, bool) {
 	return *t, true
 }
 ```
-	Name string
+
+## Generic Decorators
+```go
+
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+)
+
+func main() {
+	createUser := LogTime(AddPronoun("Mr.", CreateUser))
+	createUser(context.Background(), "john")
+	fmt.Println("Hello, 世界")
+}
+
+type Decorator[Req any, Res any] func(ctx context.Context, req Req) (Res, error)
+
+func CreateUser(ctx context.Context, name string) (id int, err error) {
+	fmt.Println("creating user:", name)
+	time.Sleep(1 * time.Second)
+	return 0, errors.New("not implemented")
+}
+
+func LogTime[Req any, Res any](fn Decorator[Req, Res]) Decorator[Req, Res] {
+	return func(ctx context.Context, req Req) (Res, error) {
+		start := time.Now()
+		defer func() {
+			fmt.Println(time.Since(start))
+		}()
+
+		return fn(ctx, req)
+	}
+}
+
+func AddPronoun(pronoun string, fn Decorator[string, int]) Decorator[string, int] {
+	return func(ctx context.Context, req string) (int, error) {
+		return fn(ctx, fmt.Sprintf("%s %s", pronoun, req))
+	}
+}
+
+```
+
