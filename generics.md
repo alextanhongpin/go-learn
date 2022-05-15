@@ -92,3 +92,35 @@ func mapR[T any, R any](in []T, fn func(T) R) []R {
 	return res
 }
 ```
+
+## Pointer and value receiver
+
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import "fmt"
+
+func main() {
+	msg := "hello world"
+	msgp := Reference(msg)
+	fmt.Println(msgp)
+	fmt.Println(Value(msgp))
+	fmt.Println(Value((*string)(nil)))
+}
+
+func Reference[T any](t T) *T {
+	return &t
+}
+
+func Value[T any](t *T) (T, bool) {
+	if t == nil {
+		var tt T
+		return tt, false
+	}
+	return *t, true
+}
+```
+	Name string
