@@ -124,9 +124,9 @@ func Value[T any](t *T) (T, bool) {
 }
 ```
 
-## Generic Decorators
-```go
+## Generic Middleware
 
+```go
 // You can edit this code!
 // Click here and start typing.
 package main
@@ -168,6 +168,50 @@ func AddPronoun(pronoun string, fn Decorator[string, int]) Decorator[string, int
 		return fn(ctx, fmt.Sprintf("%s %s", pronoun, req))
 	}
 }
-
 ```
 
+
+## Generic Decorators
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"math/rand"
+	"time"
+)
+
+func main() {
+	res, err := Retry(CallAPI, 3)(context.Background(), "john")
+	fmt.Println(res, err)
+}
+
+func CallAPI(ctx context.Context, name string) (id int, err error) {
+	fmt.Println("calling", name)
+	return 0, errors.New("bad request")
+}
+
+type AnyFunc[R any, W any] func(ctx context.Context, req R) (W, error)
+
+func Retry[R any, W any](fn AnyFunc[R, W], n int) AnyFunc[R, W] {
+	return func(ctx context.Context, req R) (res W, err error) {
+		for i := 0; i < n; i++ {
+			res, err = fn(ctx, req)
+			if err == nil {
+				return res, nil
+			}
+			seconds := (i + 1) * 1000
+			duration := time.Millisecond * time.Duration((rand.Intn(seconds) + seconds/2))
+			fmt.Println("retrying in", duration)
+			time.Sleep(duration)
+		}
+		fmt.Println("retry failed")
+		return res, err
+	}
+}
+```
