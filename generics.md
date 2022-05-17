@@ -215,3 +215,29 @@ func Retry[R any, W any](fn AnyFunc[R, W], n int) AnyFunc[R, W] {
 	}
 }
 ```
+
+### Generic hint
+
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("Hello, 世界")
+	printInt := TypedFunc[int](print)
+	printInt(42)
+}
+
+// If external lib still havent use generics, we can always assign type hints using generics.
+func print(v any) error {
+	fmt.Println(v)
+	return nil
+}
+
+func TypedFunc[T any](fn func(any) error) func(T) error {
+	return func(t T) error {
+		return fn(t)
+	}
+}
