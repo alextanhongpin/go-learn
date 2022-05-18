@@ -341,30 +341,45 @@ package main
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
-var ErrNotSet = errors.New("not set")
+var (
+	ErrNotSet             = errors.New("not set")
+	ErrInvalidEmailFormat = errors.New("invalid email format")
+)
 
 type User struct {
-	name *Field[string]
-	age  *Field[int]
-	// name Getter[string] // Interface will panic.
-	// age  Getter[int]
+	// NOTE: Don't use private field.
+	// name *Field[string]
+	// age  *Field[int]
+	Name  Getter[string] // Interface will panic.
+	Age   Getter[int]
+	Email Getter[string]
 }
 
 func (u *User) Valid() bool {
-	return u.name.Valid() &&
-		u.age.Valid()
+	return ValidGetter(u.Name) &&
+		ValidGetter(u.Age)
 }
 
 func main() {
 	u := User{
-		name: NewField("john"),
-		// age:  NewField(10),
+		Name:  NewField("john"),
+		Age:   NewField(10),
+		Email: NewEmail("john.doe@mail.com"), // Can use value object too.
+	}
+	if valid := u.Valid(); !valid {
+		// Should panic here.
 	}
 	fmt.Println(u.Valid())
-	fmt.Println(u.age.MustGet()) // Suddenly it becomes a bad idea
-	fmt.Println("Hello, 世界")
+	fmt.Println(u.Name.Get()) // Suddenly it becomes a bad idea, should only use setter/getter with public fields.
+	fmt.Println(u.Age.Get())  // Will panic.
+	fmt.Println(u.Email.Get())
+}
+
+func ValidGetter[T any](getter Getter[T]) bool {
+	return getter != nil && getter.Valid()
 }
 
 type SetterGetter[T any] interface {
@@ -396,7 +411,7 @@ func NewField[T any](t T) *Field[T] {
 	}
 }
 
-func (f *Field[T]) Valid() bool {
+func (f Field[T]) Valid() bool {
 	return f.Validate() == nil && f.dirty
 }
 
@@ -412,17 +427,55 @@ func (f *Field[T]) Set(t T) {
 	f.dirty = true
 }
 
-func (f *Field[T]) Get() (t T, valid bool) {
+func (f Field[T]) Get() (t T, valid bool) {
 	if err := f.Validate(); err != nil {
 		return
 	}
 	return f.value, f.dirty
 }
 
-func (f *Field[T]) MustGet() T {
+func (f Field[T]) MustGet() T {
 	if err := f.Validate(); err != nil {
 		panic(err)
 	}
 	return f.value
+}
+
+type Email struct {
+	value       string
+	constructed bool
+}
+
+func NewEmail(email string) *Email {
+	return &Email{
+		value:       email,
+		constructed: true,
+	}
+}
+
+func (e *Email) Validate() error {
+	if e == nil || !e.constructed {
+		return ErrNotSet
+	}
+	if !strings.Contains(e.value, "@") {
+		return ErrInvalidEmailFormat
+	}
+	return nil
+}
+
+func (e *Email) Valid() bool {
+	return e.Validate() == nil
+}
+func (e *Email) Get() (string, bool) {
+	if !e.Valid() {
+		return "", false
+	}
+	return e.value, true
+}
+func (e *Email) MustGet() string {
+	if !e.Valid() {
+		panic(ErrInvalidEmailFormat)
+	}
+	return e.value
 }
 ```
