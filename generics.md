@@ -479,3 +479,51 @@ func (e *Email) MustGet() string {
 	return e.value
 }
 ```
+
+## Type Converter
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+)
+
+type CreateUserRequest struct {
+	Name string `json:"name"`
+	Age  int    `json:"age"`
+}
+
+type User struct {
+	Name string `json:"name"`
+	Age  int    `json:"age"`
+}
+
+func main() {
+	req := CreateUserRequest{
+		Name: "john",
+		Age:  13,
+	}
+	user, err := TypeConverter[User](req)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(user)
+}
+
+func TypeConverter[T any](s any) (T, error) {
+	var t T
+	b, err := json.Marshal(s)
+	if err != nil {
+		return t, err
+	}
+	if err := json.Unmarshal(b, &t); err != nil {
+		return t, err
+	}
+	return t, nil
+}
+```
+
