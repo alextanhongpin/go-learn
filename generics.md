@@ -216,7 +216,7 @@ func Retry[R any, W any](fn AnyFunc[R, W], n int) AnyFunc[R, W] {
 }
 ```
 
-### Generic hint
+### Generic Slice
 
 ```go
 // You can edit this code!
@@ -251,27 +251,88 @@ func TypedFunc[T any](fn func(any) error) func(T) error {
 // Click here and start typing.
 package main
 
-import "fmt"
+import (
+	"fmt"
+
+	"play.ground/slice"
+)
 
 func main() {
-	list := List[int]([]int{1, 2, 3})
-	result := list.Filter(func(i int) bool {
-		return i > 2
+	numbers := []int{1, 2, 3}
+	ids := slice.Map(numbers, func(n int, _ int) string {
+		return fmt.Sprint(n)
 	})
-	fmt.Println(result)
+
+	fmt.Println(ids)
+	isPositive := slice.All(numbers, func(i int) bool {
+		return i > 0
+	})
+	fmt.Println(isPositive)
+
+	hasTwo := slice.Any(ids, func(id string) bool {
+		return id == "2"
+	})
+	fmt.Println(hasTwo)
+
+	idx, found := slice.FindIndex(numbers, func(i int) bool {
+		return i == 42
+	})
+	fmt.Println(idx, found)
 }
+-- go.mod --
+module play.ground
+-- slice/slice.go --
+package slice
 
-type List[T any] []T
-
-func (list List[T]) Filter(fn func(T) bool) List[T] {
-	result := make([]T, 0, len(list))
-	for _, item := range list {
-		if fn(item) {
-			result = append(result, item)
-		}
+func Map[T any, R any](list []T, fn func(T, int) R) []R {
+	result := make([]R, len(list))
+	for i, t := range list {
+		result[i] = fn(t, i)
 	}
 	return result
 }
+
+func All[T any](list []T, fn func(T) bool) bool {
+	for _, item := range list {
+		if !fn(item) {
+			return false
+		}
+	}
+	return true
+}
+
+func Any[T any](list []T, fn func(T) bool) bool {
+	for _, item := range list {
+		if fn(item) {
+			return true
+		}
+	}
+	return false
+}
+
+func Find[T any](list []T, fn func(T) bool) (t T, found bool) {
+	for _, item := range list {
+		if fn(item) {
+			t = item
+			found = true
+			return
+		}
+	}
+	return
+}
+
+func FindIndex[T any](list []T, fn func(T) bool) (index int, found bool) {
+	for i, item := range list {
+		if fn(item) {
+			index = i
+			found = true
+			return
+		}
+	}
+	return
+}
+
+
 ```
 
 ## Generic Slice
