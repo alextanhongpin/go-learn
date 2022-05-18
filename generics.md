@@ -574,6 +574,106 @@ func (e *Email) MustGet() string {
 }
 ```
 
+## Getter v2
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+)
+
+type User struct {
+	Name *Getter[string] `json:"name,omitempty"`
+	Age  *Getter[int]    `json:"age"`
+}
+
+func (u *User) Valid() bool {
+	return u.Name.Valid() && u.Age.Valid()
+}
+
+var ErrNotSet = errors.New("not set")
+
+func main() {
+	var u User
+	if err := json.Unmarshal([]byte(`{
+		"name": "alice",
+		"age": 13
+	}`), &u); err != nil {
+		panic(err)
+	}
+	fmt.Println(u, u.Name.Valid(), u.Age.Valid(), u.Valid())
+
+	u2 := User{
+		Name: NewGetter("bob"),
+		Age:  NewGetter(42),
+	}
+	fmt.Println(u2, u2.Valid())
+	b, err := json.Marshal(u2)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(string(b))
+}
+
+type Getter[T any] struct {
+	value T
+	dirty bool
+}
+
+func NewGetter[T any](t T) *Getter[T] {
+	return &Getter[T]{value: t, dirty: true}
+}
+
+func (g *Getter[T]) Validate() error {
+	if g == nil || !g.dirty {
+		return ErrNotSet
+	}
+	return nil
+}
+
+func (g *Getter[T]) Valid() bool {
+	return g.Validate() == nil
+}
+
+func (g *Getter[T]) Get() (t T, valid bool) {
+	if !g.Valid() {
+		return
+	}
+	return g.value, true
+}
+func (g *Getter[T]) MustGet() (t T) {
+	if !g.Valid() {
+		panic(ErrNotSet)
+	}
+	return g.value
+}
+func (g Getter[T]) String() string {
+	return fmt.Sprint(g.value)
+}
+
+func (g Getter[T]) MarshalJSON() ([]byte, error) {
+	return json.Marshal(g.value)
+}
+
+func (g *Getter[T]) UnmarshalJSON(raw []byte) error {
+	if bytes.Equal(raw, []byte("null")) {
+		return nil
+	}
+	var t T
+	if err := json.Unmarshal(raw, &t); err != nil {
+		return err
+	}
+	g.value = t
+	g.dirty = true
+	return nil
+}
+```
+
 ## Type Converter
 
 ```go
@@ -851,4 +951,6 @@ func Reverse[T any](slice []T) []T {
 	return result
 }
 ```
+
+
 
