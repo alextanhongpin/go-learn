@@ -273,3 +273,60 @@ func (list List[T]) Filter(fn func(T) bool) List[T] {
 	return result
 }
 ```
+
+## Generic Slice
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import "fmt"
+
+type Person struct {
+	_    struct{}
+	name string
+	age  int
+}
+
+func main() {
+	fmt.Println("Hello, 世界")
+	numbers := []int{1, 2, 3, 4, 5}
+	greaterThree := Filter(numbers, func(i int) bool {
+		return i > 3
+	})
+	fmt.Println(greaterThree)
+
+	people := []Person{
+		{name: "john", age: 10},
+		{name: "jane", age: 20},
+	}
+	personByName := ToMap(people, func(p Person) string {
+		return p.name
+	})
+	fmt.Println(personByName)
+}
+
+func Filter[T any](list []T, fn func(T) bool) []T {
+	result := make([]T, 0, len(list))
+	for _, item := range list {
+		if fn(item) {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func ToMap[K comparable, V any](list []V, getKeyFn func(V) K) map[K]V {
+	result := make(map[K]V)
+	for _, item := range list {
+		key := getKeyFn(item)
+		_, ok := result[key]
+		if ok {
+			panic(fmt.Errorf("key exists: %s", key))
+		}
+		result[key] = item
+	}
+	return result
+}
+```
