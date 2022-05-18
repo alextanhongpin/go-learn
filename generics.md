@@ -527,3 +527,63 @@ func TypeConverter[T any](s any) (T, error) {
 }
 ```
 
+## Typed template
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"html/template"
+	"io"
+	"os"
+)
+
+var greet = NewTypedTemplate[*Greet](template.Must(template.New("").Parse(`hello {{.Name}}`)))
+var greet2 = TypedTemplateFunc[*Greet](template.Must(template.New("").Parse(`hello {{.Name}}`)))
+
+type Greet struct {
+	Name string
+}
+
+type Person struct {
+	Name string
+	Age  int
+}
+
+type Template[T any] interface {
+	Execute(wr io.Writer, data T) error
+}
+
+type TypedTemplate[T any] struct {
+	tpl Template[any]
+}
+
+func NewTypedTemplate[T any](tpl Template[any]) *TypedTemplate[T] {
+	return &TypedTemplate[T]{
+		tpl: tpl,
+	}
+}
+
+func (t *TypedTemplate[T]) Execute(wr io.Writer, data T) error {
+	return t.tpl.Execute(wr, data)
+}
+
+func TypedTemplateFunc[T any](t Template[any]) func(io.Writer, T) error {
+	return func(wr io.Writer, data T) error {
+		return t.Execute(wr, data)
+	}
+}
+
+func main() {
+	if err := greet.Execute(os.Stdout, &Greet{"world"}); err != nil {
+		panic(err)
+	}
+	if err := greet2(os.Stdout, &Greet{"world"}); err != nil {
+		panic(err)
+	}
+}
+
+```
+
