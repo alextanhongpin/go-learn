@@ -330,3 +330,99 @@ func ToMap[K comparable, V any](list []V, getKeyFn func(V) K) map[K]V {
 	return result
 }
 ```
+
+## Setter getter again
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"errors"
+	"fmt"
+)
+
+var ErrNotSet = errors.New("not set")
+
+type User struct {
+	name *Field[string]
+	age  *Field[int]
+	// name Getter[string] // Interface will panic.
+	// age  Getter[int]
+}
+
+func (u *User) Valid() bool {
+	return u.name.Valid() &&
+		u.age.Valid()
+}
+
+func main() {
+	u := User{
+		name: NewField("john"),
+		// age:  NewField(10),
+	}
+	fmt.Println(u.Valid())
+	fmt.Println(u.age.MustGet()) // Suddenly it becomes a bad idea
+	fmt.Println("Hello, 世界")
+}
+
+type SetterGetter[T any] interface {
+	Setter[T]
+	Getter[T]
+}
+
+type Setter[T any] interface {
+	Set(T)
+}
+
+type Getter[T any] interface {
+	Get() (T, bool)
+	MustGet() T
+	Valid() bool
+}
+
+type Field[T any] struct {
+	value       T
+	dirty       bool
+	constructed bool
+}
+
+func NewField[T any](t T) *Field[T] {
+	return &Field[T]{
+		value:       t,
+		dirty:       true,
+		constructed: true,
+	}
+}
+
+func (f *Field[T]) Valid() bool {
+	return f.Validate() == nil && f.dirty
+}
+
+func (f *Field[T]) Validate() error {
+	if f == nil || !f.constructed {
+		return ErrNotSet
+	}
+	return nil
+}
+
+func (f *Field[T]) Set(t T) {
+	f.value = t
+	f.dirty = true
+}
+
+func (f *Field[T]) Get() (t T, valid bool) {
+	if err := f.Validate(); err != nil {
+		return
+	}
+	return f.value, f.dirty
+}
+
+func (f *Field[T]) MustGet() T {
+	if err := f.Validate(); err != nil {
+		panic(err)
+	}
+	return f.value
+}
+```
