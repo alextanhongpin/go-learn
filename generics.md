@@ -218,6 +218,7 @@ func Retry[R any, W any](fn AnyFunc[R, W], n int) AnyFunc[R, W] {
 
 ### Generic hint
 
+```go
 // You can edit this code!
 // Click here and start typing.
 package main
@@ -241,3 +242,34 @@ func TypedFunc[T any](fn func(any) error) func(T) error {
 		return fn(t)
 	}
 }
+```
+
+### Generic Filter
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import "fmt"
+
+func main() {
+	list := List[int]([]int{1, 2, 3})
+	result := list.Filter(func(i int) bool {
+		return i > 2
+	})
+	fmt.Println(result)
+}
+
+type List[T any] []T
+
+func (list List[T]) Filter(fn func(T) bool) List[T] {
+	result := make([]T, 0, len(list))
+	for _, item := range list {
+		if fn(item) {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+```
