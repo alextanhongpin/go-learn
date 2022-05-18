@@ -331,6 +331,39 @@ func ToMap[K comparable, V any](list []V, getKeyFn func(V) K) map[K]V {
 }
 ```
 
+## Some more generic slice
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import "fmt"
+
+func main() {
+	fmt.Println(Slice[int]{}.FillZero(3))
+	fmt.Println(Slice[bool]{}.FillZero(3))
+}
+
+func Echo[T any](fn func() T) T {
+	return fn()
+}
+
+type Slice[T any] []T
+
+func (s Slice[T]) FillFunc(n int, fill func() T) []T {
+	result := make([]T, n)
+	for i := 0; i < n; i++ {
+		result[i] = fill()
+	}
+	return result
+}
+
+func (s Slice[T]) FillZero(n int) []T {
+	result := make([]T, n)
+	return result
+}
+```
+
 ## Setter getter again
 
 ```go
