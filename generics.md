@@ -681,3 +681,174 @@ func main() {
 
 ```
 
+## Service Hooks
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"math/rand"
+	"strings"
+	"time"
+
+	"play.ground/service"
+)
+
+type Person struct {
+	Salutation string
+	Name       string
+}
+
+func main() {
+	hook := service.New[string, *Person](GreetError)
+	// hook := service.New[string, *Person](Greet)
+	hook.Prepend(Precondition)
+	hook.Append(Postcondition)
+	hook.Decorate(
+		Log[string, *Person], // Order matters. 
+		Retry[string, *Person](3),
+	)
+	res, err := hook.Handle(context.Background(), "john")
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(res)
+}
+
+func Precondition(ctx context.Context, name string) (string, error) {
+	if name == "" {
+		return "", errors.New("required")
+	}
+	return name, nil
+}
+
+func Postcondition(ctx context.Context, person *Person) (*Person, error) {
+	if !strings.EqualFold(person.Salutation, "Mr.") {
+		return nil, errors.New("missing prefix")
+	}
+	return person, nil
+}
+
+func Greet(ctx context.Context, name string) (*Person, error) {
+	return &Person{
+		Salutation: "Mr.",
+		Name:       name,
+	}, nil
+}
+
+func GreetError(ctx context.Context, name string) (*Person, error) {
+	return nil, errors.New("bad person")
+}
+
+func Log[Req any, Res any](fn service.Handler[Req, Res]) service.Handler[Req, Res] {
+	return func(ctx context.Context, req Req) (Res, error) {
+		start := time.Now()
+		defer func() {
+			fmt.Println(time.Since(start))
+		}()
+		return fn(ctx, req)
+	}
+}
+
+func Retry[Req any, Res any](n int) service.Decorator[Req, Res] {
+	return func(fn service.Handler[Req, Res]) service.Handler[Req, Res] {
+		return func(ctx context.Context, req Req) (res Res, err error) {
+			for i := 0; i < n; i++ {
+				res, err = fn(ctx, req)
+				if err == nil {
+					return res, err
+				}
+
+				ms := (i + 1) * 1000
+				ms = rand.Intn(ms) + ms/2
+				fmt.Printf("sleep for %d ms\n", ms)
+				time.Sleep(time.Duration(ms) * time.Millisecond)
+			}
+			err = fmt.Errorf("%w: too many retries")
+			return
+		}
+	}
+}
+-- go.mod --
+module play.ground
+-- service/service.go --
+package service
+
+import (
+	"context"
+)
+
+type Handler[Req any, Res any] func(ctx context.Context, req Req) (Res, error)
+
+type Decorator[Req any, Res any] func(h Handler[Req, Res]) Handler[Req, Res]
+
+type Func[T any] func(ctx context.Context, t T) (T, error)
+
+type Hook[Req any, Res any] struct {
+	handle     Handler[Req, Res]
+	before     []Func[Req]
+	after      []Func[Res]
+	decorators []Decorator[Req, Res]
+}
+
+func New[Req any, Res any](fn Handler[Req, Res]) *Hook[Req, Res] {
+	return &Hook[Req, Res]{
+		handle: fn,
+	}
+}
+
+func (hook *Hook[Req, Res]) Decorate(fns ...Decorator[Req, Res]) {
+	hook.decorators = append(hook.decorators, fns...)
+}
+
+func (hook *Hook[Req, Res]) Append(fns ...Func[Res]) {
+	hook.after = append(hook.after, fns...)
+}
+
+func (hook *Hook[Req, Res]) Prepend(fns ...Func[Req]) {
+	hook.before = append(hook.before, fns...)
+}
+
+func (hook *Hook[Req, Res]) Handle(ctx context.Context, req Req) (res Res, err error) {
+	for _, fn := range hook.before {
+		req, err = fn(ctx, req)
+		if err != nil {
+			return
+		}
+	}
+
+	decorated := hook.handle
+	for _, decorator := range Reverse(hook.decorators) {
+		decorated = decorator(decorated)
+	}
+
+	res, err = decorated(ctx, req)
+	if err != nil {
+		return
+	}
+
+	for _, fn := range hook.after {
+		res, err = fn(ctx, res)
+		if err != nil {
+			return
+		}
+	}
+	return
+}
+
+func Reverse[T any](slice []T) []T {
+	result := make([]T, len(slice))
+	copy(result, slice)
+
+	for i, j := 0, len(result)-1; i < j; i, j = i+1, j-1 {
+		result[i], result[j] = result[j], result[i]
+	}
+	return result
+}
+```
+
