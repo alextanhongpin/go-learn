@@ -1004,7 +1004,13 @@ func main() {
 
 	var john User
 	if err := json.Unmarshal([]byte(`{"age": -1}`), &john); err != nil {
-		panic(err)
+		if errors.Is(err, ErrInvalidValue) {
+			// Check if this is error due to value object, which
+			// will be a validation error.
+			fmt.Println("unmarshal error", err)
+		} else {
+			panic(err)
+		}
 	}
 	fmt.Println("john", john)
 	fmt.Println("age valid", john.Age.Valid())
@@ -1050,10 +1056,13 @@ func (a *Age) UnmarshalJSON(raw []byte) error {
 	// Set back the age validator manually here.
 	v.SetValidator(ValidateAge)
 	a.Value = v
-	return nil
+
+	// Additionally perform validation here
+	// return nil
+	return a.Validate()
 }
 
-var ErrInvalidAgeRange = errors.New("invalid age range")
+var ErrInvalidAgeRange = fmt.Errorf("%w: invalid age", ErrInvalidValue)
 
 func ValidateAge(age int) error {
 	if age < 0 {
@@ -1071,6 +1080,7 @@ func NewAge(age int) (*Age, error) {
 }
 
 var ErrNotSet = errors.New("not set")
+var ErrInvalidValue = errors.New("invalid value")
 
 // Value represents a generic value object.
 type Value[T any] struct {
@@ -1197,4 +1207,5 @@ func (v *Value[T]) UnmarshalJSON(raw []byte) error {
 	*v = *Must(NewValue[T](t))
 	return nil
 }
+
 ```
