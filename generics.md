@@ -963,6 +963,8 @@ func Reverse[T any](slice []T) []T {
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 )
@@ -979,6 +981,26 @@ func main() {
 	fmt.Println(age.Get())
 	fmt.Println(age.MustGet())
 	fmt.Println(age)
+
+	b, err := json.Marshal(age)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("marshall", string(b))
+
+	u := User{Age: age}
+	b, err = json.Marshal(u)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("user", string(b))
+
+	u = User{}
+	b, err = json.Marshal(u)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("user", string(b))
 
 	var v *Value[string]
 	fmt.Println(v.IsZero())
@@ -998,6 +1020,11 @@ func main() {
 	fmt.Println(v.Validate())
 	vv, err := v.With("hello world")
 	fmt.Println(vv, err)
+
+}
+
+type User struct {
+	Age *Age `json:"age"`
 }
 
 // Age value object.
@@ -1038,6 +1065,14 @@ func WithValidator[T any](validator func(T) error) ValueOption[T] {
 		v.validator = validator
 		return v
 	}
+
+}
+
+func Must[T any](v *Value[T], err error) *Value[T] {
+	if err != nil {
+		panic(err)
+	}
+	return v
 }
 
 func NewValue[T any](t T, options ...ValueOption[T]) (*Value[T], error) {
@@ -1118,4 +1153,25 @@ func (v Value[T]) String() string {
 	}
 	return fmt.Sprint(v.value)
 }
+
+func (v Value[T]) MarshalJSON() ([]byte, error) {
+	if v.IsZero() {
+		return []byte("null"), nil
+	}
+	return json.Marshal(v.value)
+}
+
+// UnmarshalJSON does not add back the validator - figure out how to add it back through reflection.
+func (v *Value[T]) UnmarshalJSON(raw []byte) error {
+	if bytes.Equal(raw, []byte("null")) {
+		return nil
+	}
+	var t T
+	if err := json.Unmarshal(raw, &t); err != nil {
+		return err
+	}
+	v = Must(NewValue[T](t))
+	return nil
+}
+
 ```
