@@ -1002,6 +1002,13 @@ func main() {
 	}
 	fmt.Println("user", string(b))
 
+	var john User
+	if err := json.Unmarshal([]byte(`{"age": -1}`), &john); err != nil {
+		panic(err)
+	}
+	fmt.Println("john", john)
+	fmt.Println("age valid", john.Age.Valid())
+
 	var v *Value[string]
 	fmt.Println(v.IsZero())
 	fmt.Println(v.Valid())
@@ -1020,7 +1027,6 @@ func main() {
 	fmt.Println(v.Validate())
 	vv, err := v.With("hello world")
 	fmt.Println(vv, err)
-
 }
 
 type User struct {
@@ -1029,7 +1035,22 @@ type User struct {
 
 // Age value object.
 type Age struct {
-	*Value[int]
+	// *Value[int] Don't use pointer, there will be issue with unmarshalling
+	Value[int]
+}
+
+func (a *Age) UnmarshalJSON(raw []byte) error {
+	if a == nil {
+		// TODO
+	}
+	var v Value[int]
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return err
+	}
+	// Set back the age validator manually here.
+	v.SetValidator(ValidateAge)
+	a.Value = v
+	return nil
 }
 
 var ErrInvalidAgeRange = errors.New("invalid age range")
@@ -1046,7 +1067,7 @@ func NewAge(age int) (*Age, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Age{value}, nil
+	return &Age{*value}, nil
 }
 
 var ErrNotSet = errors.New("not set")
@@ -1147,7 +1168,7 @@ func (v *Value[T]) Valid() bool {
 	return v.Validate() == nil
 }
 
-func (v Value[T]) String() string {
+func (v *Value[T]) String() string {
 	if v.IsZero() {
 		return "NOT SET"
 	}
@@ -1161,8 +1182,11 @@ func (v Value[T]) MarshalJSON() ([]byte, error) {
 	return json.Marshal(v.value)
 }
 
-// UnmarshalJSON does not add back the validator - figure out how to add it back through reflection.
+// UnmarshalJSON does not add back the validator - figure out how to add it back through reflection (NOTE: manually add in value object, see Age example).
 func (v *Value[T]) UnmarshalJSON(raw []byte) error {
+	if v == nil {
+		return errors.New("unmarshal to nil Value[T]")
+	}
 	if bytes.Equal(raw, []byte("null")) {
 		return nil
 	}
@@ -1170,8 +1194,7 @@ func (v *Value[T]) UnmarshalJSON(raw []byte) error {
 	if err := json.Unmarshal(raw, &t); err != nil {
 		return err
 	}
-	v = Must(NewValue[T](t))
+	*v = *Must(NewValue[T](t))
 	return nil
 }
-
 ```
