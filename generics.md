@@ -954,3 +954,157 @@ func Reverse[T any](slice []T) []T {
 
 
 
+
+### Base Value Object
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"errors"
+	"fmt"
+)
+
+func main() {
+	age, err := NewAge(10)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(age.Valid())
+	fmt.Println(age.IsZero())
+	fmt.Println(age.Validate())
+	fmt.Println(age.Set(-10))
+	fmt.Println(age.Get())
+	fmt.Println(age.MustGet())
+	fmt.Println(age)
+
+	var v *Value[string]
+	fmt.Println(v.IsZero())
+	fmt.Println(v.Valid())
+	fmt.Println(v.Validate())
+	v = new(Value[string])
+	v.Set("hello")
+
+	fmt.Println(v.Valid())
+	fmt.Println(v.Validate())
+	v.SetValidator(func(s string) error {
+		if len(s) < 10 {
+			return errors.New("too short")
+		}
+		return nil
+	})
+	fmt.Println(v.Validate())
+	vv, err := v.With("hello world")
+	fmt.Println(vv, err)
+}
+
+// Age value object.
+type Age struct {
+	*Value[int]
+}
+
+var ErrInvalidAgeRange = errors.New("invalid age range")
+
+func ValidateAge(age int) error {
+	if age < 0 {
+		return ErrInvalidAgeRange
+	}
+	return nil
+
+}
+func NewAge(age int) (*Age, error) {
+	if err := ValidateAge(age); err != nil {
+		return nil, err
+	}
+	return &Age{NewValue(age).SetValidator(ValidateAge)}, nil
+}
+
+var ErrNotSet = errors.New("not set")
+
+// Value represents a generic value object.
+type Value[T any] struct {
+	value     T
+	dirty     bool
+	validator func(T) error
+}
+
+func NewValue[T any](t ...T) *Value[T] {
+	if len(t) > 1 {
+		panic("too many args for NewValue")
+	}
+	return &Value[T]{
+		value:     t[0],
+		dirty:     true,
+		validator: nil,
+	}
+}
+
+func (v *Value[T]) IsZero() bool {
+	return v == nil || !v.dirty
+}
+func (v *Value[T]) IsSet() bool {
+	return !v.IsZero() && v.dirty
+}
+
+func (v *Value[T]) SetValidator(fn func(T) error) *Value[T] {
+	v.validator = fn
+	return v
+}
+
+func (v *Value[T]) With(t T) (*Value[T], error) {
+	if err := v.validate(t); err != nil {
+		return v, err
+	}
+	return NewValue[T](t).SetValidator(v.validator), nil
+}
+
+func (v *Value[T]) Set(t T) error {
+	if err := v.validate(t); err != nil {
+		return err
+	}
+	v.value = t
+	v.dirty = true
+	return nil
+}
+
+func (v *Value[T]) Get() (t T, isSet bool) {
+	if !v.IsSet() {
+		return
+	}
+	return v.value, v.dirty
+}
+
+func (v *Value[T]) MustGet() (t T) {
+	if !v.IsSet() {
+		panic(ErrNotSet)
+	}
+	return v.value
+}
+
+func (v *Value[T]) validate(t T) error {
+	if validate := v.validator; validate != nil {
+		return validate(t)
+	}
+	return nil
+}
+
+func (v *Value[T]) Validate() error {
+	if v.IsZero() {
+		return ErrNotSet
+	}
+	return v.validate(v.value)
+}
+
+func (v *Value[T]) Valid() bool {
+	return v.Validate() == nil
+}
+
+func (v Value[T]) String() string {
+	if v.IsZero() {
+		return "NOT SET"
+	}
+	return fmt.Sprint(v.value)
+}
+```
