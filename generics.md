@@ -1015,10 +1015,11 @@ func ValidateAge(age int) error {
 
 }
 func NewAge(age int) (*Age, error) {
-	if err := ValidateAge(age); err != nil {
+	value, err := NewValue(age, WithValidator(ValidateAge))
+	if err != nil {
 		return nil, err
 	}
-	return &Age{NewValue(age).SetValidator(ValidateAge)}, nil
+	return &Age{value}, nil
 }
 
 var ErrNotSet = errors.New("not set")
@@ -1030,15 +1031,25 @@ type Value[T any] struct {
 	validator func(T) error
 }
 
-func NewValue[T any](t ...T) *Value[T] {
-	if len(t) > 1 {
-		panic("too many args for NewValue")
+type ValueOption[T any] func(*Value[T]) *Value[T]
+
+func WithValidator[T any](validator func(T) error) ValueOption[T] {
+	return func(v *Value[T]) *Value[T] {
+		v.validator = validator
+		return v
 	}
-	return &Value[T]{
-		value:     t[0],
+}
+
+func NewValue[T any](t T, options ...ValueOption[T]) (*Value[T], error) {
+	v := &Value[T]{
+		value:     t,
 		dirty:     true,
 		validator: nil,
 	}
+	for _, opt := range options {
+		opt(v)
+	}
+	return v, v.Validate()
 }
 
 func (v *Value[T]) IsZero() bool {
@@ -1057,7 +1068,7 @@ func (v *Value[T]) With(t T) (*Value[T], error) {
 	if err := v.validate(t); err != nil {
 		return v, err
 	}
-	return NewValue[T](t).SetValidator(v.validator), nil
+	return NewValue[T](t, WithValidator(v.validator))
 }
 
 func (v *Value[T]) Set(t T) error {
