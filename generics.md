@@ -1532,6 +1532,85 @@ import (
 
 var baseURL = "http://localhost:3333"
 
+func main() {
+	// Fetch users.
+	ctx := context.Background()
+	usersResult, err := Fetch[Success[[]User], Error](ctx, baseURL+"/users")
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println()
+	fmt.Printf("users data: %+v\n", usersResult.Data)
+	fmt.Printf("users error: %+v\n", usersResult.Error)
+
+	// Fetch one user.
+	userResult, err := Fetch[Success[User], Error](ctx, baseURL+"/users/%d", 1)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println()
+	fmt.Printf("users data: %+v\n", userResult.Data)
+	fmt.Printf("users error: %+v\n", userResult.Error)
+
+	// Fetch non-existing user.
+	userResult, err = Fetch[Success[User], Error](ctx, baseURL+"/users/%d", -1)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println()
+	fmt.Printf("users data: %+v\n", userResult.Data)
+	fmt.Printf("users error: %+v\n", userResult.Error)
+
+	// Fetch books.
+	booksResult, err := Fetch[Success[[]Book], Error](ctx, baseURL+"/books")
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println()
+	fmt.Printf("books data: %+v\n", booksResult.Data)
+	fmt.Printf("books error: %+v\n", booksResult.Error)
+
+	// Fetch one book.
+	bookResult, err := Fetch[Success[Book], Error](ctx, baseURL+"/books/%d", 1)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println()
+	fmt.Printf("books data: %+v\n", bookResult.Data)
+	fmt.Printf("books error: %+v\n", bookResult.Error)
+
+	// Fetch non-existing book.
+	bookResult, err = Fetch[Success[Book], Error](ctx, baseURL+"/books/%d", -1)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println()
+	fmt.Printf("books data: %+v\n", bookResult.Data)
+	fmt.Printf("books error: %+v\n", bookResult.Error)
+
+	/*
+		// Output:
+
+		users data: &{Data:[{_:{} Name:Alice Age:10} {_:{} Name:Bob Age:13}]}
+		users error: <nil>
+
+		users data: &{Data:{_:{} Name:Alice Age:10}}
+		users error: <nil>
+
+		users data: <nil>
+		users error: &{Error:not found}
+
+		books data: &{Data:[{_:{} Title:Thinking Fast & Slow Summary Author:} {_:{} Title:Influence: Science and Practice Author:}]}
+		books error: <nil>
+
+		books data: &{Data:{_:{} Title:Thinking Fast & Slow Summary Author:}}
+		books error: <nil>
+
+		books data: <nil>
+		books error: &{Error:not found}
+	*/
+}
+
 type User struct {
 	_    struct{}
 	Name string `json:"name"`
@@ -1544,88 +1623,21 @@ type Book struct {
 	Author string `json:"book"`
 }
 
-type Response[T any] struct {
-	Data  T      `json:"data"`
-	Error string `json:"error,omitempty"`
+type Success[T any] struct {
+	Data T `json:"data"`
 }
 
-func main() {
-	// Fetch users.
-	fetchUsers := NewFetcher[Response[[]User], Response[any]](baseURL + "/users")
-	usersResult, err := fetchUsers.Fetch(context.Background())
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println()
-	fmt.Printf("users data: %+v\n", usersResult.Data)
-	fmt.Printf("users error: %+v\n", usersResult.Error)
-
-	// Fetch one user.
-	fetchUser := NewFetcher[Response[User], Response[any]](baseURL + "/users/%d")
-	userResult, err := fetchUser.Fetch(context.Background(), 1)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println()
-	fmt.Printf("users data: %+v\n", userResult.Data)
-	fmt.Printf("users error: %+v\n", userResult.Error)
-
-	// Fetch non-existing user.
-	userResult, err = fetchUser.Fetch(context.Background(), -1)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println()
-	fmt.Printf("users data: %+v\n", userResult.Data)
-	fmt.Printf("users error: %+v\n", userResult.Error)
-
-	// Fetch books.
-	fetchBooks := NewFetcher[Response[[]Book], Response[any]](baseURL + "/books")
-	booksResult, err := fetchBooks.Fetch(context.Background())
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println()
-	fmt.Printf("books data: %+v\n", booksResult.Data)
-	fmt.Printf("books error: %+v\n", booksResult.Error)
-
-	// Fetch one book.
-	fetchBook := NewFetcher[Response[Book], Response[any]](baseURL + "/books/%d")
-	bookResult, err := fetchBook.Fetch(context.Background(), 1)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println()
-	fmt.Printf("books data: %+v\n", bookResult.Data)
-	fmt.Printf("books error: %+v\n", bookResult.Error)
-
-	// Fetch non-existing book.
-	bookResult, err = fetchBook.Fetch(context.Background(), -1)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println()
-	fmt.Printf("books data: %+v\n", bookResult.Data)
-	fmt.Printf("books error: %+v\n", bookResult.Error)
+type Error struct {
+	Error string `json:"error"`
 }
 
 type Result[T any, E any] struct {
-	Data  T
-	Error E
+	Data  *T
+	Error *E
 }
 
-type Fetcher[T any, E any] struct {
-	url string
-}
-
-func NewFetcher[T any, E any](url string) *Fetcher[T, E] {
-	return &Fetcher[T, E]{
-		url: url,
-	}
-}
-
-func (f *Fetcher[T, E]) Fetch(ctx context.Context, args ...any) (*Result[T, E], error) {
-	resp, err := http.Get(fmt.Sprintf(f.url, args...))
+func Fetch[T any, E any](ctx context.Context, url string, args ...any) (*Result[T, E], error) {
+	resp, err := http.Get(fmt.Sprintf(url, args...))
 	if err != nil {
 		panic(err)
 	}
@@ -1638,13 +1650,13 @@ func (f *Fetcher[T, E]) Fetch(ctx context.Context, args ...any) (*Result[T, E], 
 		if err := json.NewDecoder(resp.Body).Decode(&t); err != nil {
 			return nil, err
 		}
-		result.Data = t
+		result.Data = &t
 	} else if resp.StatusCode >= 400 && resp.StatusCode < 500 {
 		var e E
 		if err := json.NewDecoder(resp.Body).Decode(&e); err != nil {
 			return nil, err
 		}
-		result.Error = e
+		result.Error = &e
 	} else {
 
 		body, err := io.ReadAll(resp.Body)
