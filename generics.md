@@ -1410,3 +1410,251 @@ func (v *Value[T]) UnmarshalJSON(raw []byte) error {
 }
 
 ```
+
+
+## Generic HTTP Fetch
+
+`server.go`:
+```go
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"strconv"
+
+	"github.com/go-chi/chi"
+)
+
+var ErrNotFound = errors.New("not found")
+
+type User struct {
+	_    struct{}
+	Name string `json:"name"`
+	Age  int    `json:"age"`
+}
+
+type Book struct {
+	_      struct{}
+	Title  string `json:"title"`
+	Author string `json:"author"`
+}
+
+type Response[T any] struct {
+	Data  T      `json:"data"`
+	Error string `json:"error,omitempty"`
+}
+
+func NewResponse[T any](data T) *Response[T] {
+	return &Response[T]{
+		Data: data,
+	}
+}
+
+func NewErrorResponse(err error) *Response[any] {
+	return &Response[any]{
+		Error: err.Error(),
+	}
+}
+
+var users = []User{
+	{Name: "Alice", Age: 10},
+	{Name: "Bob", Age: 13},
+}
+
+var books = []Book{
+	{Title: "Thinking Fast & Slow Summary", Author: "Daniel Kahneman"},
+	{Title: "Influence: Science and Practice", Author: "Robert Cialdini"},
+}
+
+func main() {
+	r := chi.NewRouter()
+	r.Get("/users", getUsers)
+	r.Get("/users/{user_id}", getUserByID)
+	r.Get("/books", getBooks)
+	r.Get("/books/{book_id}", getBookByID)
+
+	fmt.Println("listening to port *:3333. press ctrl + c to cancel")
+	http.ListenAndServe(":3333", r)
+}
+
+func getUsers(w http.ResponseWriter, r *http.Request) {
+	json.NewEncoder(w).Encode(NewResponse(users))
+}
+
+func getUserByID(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "user_id")
+	id, _ := strconv.Atoi(userID)
+	id-- // Id starts from 1
+
+	if id < 0 || id > len(users)-1 {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(NewErrorResponse(ErrNotFound))
+		return
+	}
+
+	json.NewEncoder(w).Encode(NewResponse(users[id]))
+}
+
+func getBooks(w http.ResponseWriter, r *http.Request) {
+	json.NewEncoder(w).Encode(NewResponse(books))
+}
+
+func getBookByID(w http.ResponseWriter, r *http.Request) {
+	bookID := chi.URLParam(r, "book_id")
+	id, _ := strconv.Atoi(bookID)
+	id-- // Id starts from 1
+
+	if id < 0 || id > len(books)-1 {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(NewErrorResponse(ErrNotFound))
+		return
+	}
+
+	json.NewEncoder(w).Encode(NewResponse(books[id]))
+}
+```
+
+`client.go`:
+```go
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+)
+
+var baseURL = "http://localhost:3333"
+
+type User struct {
+	_    struct{}
+	Name string `json:"name"`
+	Age  int    `json:"age"`
+}
+
+type Book struct {
+	_      struct{}
+	Title  string `json:"title"`
+	Author string `json:"book"`
+}
+
+type Response[T any] struct {
+	Data  T      `json:"data"`
+	Error string `json:"error,omitempty"`
+}
+
+func main() {
+	// Fetch users.
+	fetchUsers := NewFetcher[Response[[]User], Response[any]](baseURL + "/users")
+	usersResult, err := fetchUsers.Fetch(context.Background())
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println()
+	fmt.Printf("users data: %+v\n", usersResult.Data)
+	fmt.Printf("users error: %+v\n", usersResult.Error)
+
+	// Fetch one user.
+	fetchUser := NewFetcher[Response[User], Response[any]](baseURL + "/users/%d")
+	userResult, err := fetchUser.Fetch(context.Background(), 1)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println()
+	fmt.Printf("users data: %+v\n", userResult.Data)
+	fmt.Printf("users error: %+v\n", userResult.Error)
+
+	// Fetch non-existing user.
+	userResult, err = fetchUser.Fetch(context.Background(), -1)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println()
+	fmt.Printf("users data: %+v\n", userResult.Data)
+	fmt.Printf("users error: %+v\n", userResult.Error)
+
+	// Fetch books.
+	fetchBooks := NewFetcher[Response[[]Book], Response[any]](baseURL + "/books")
+	booksResult, err := fetchBooks.Fetch(context.Background())
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println()
+	fmt.Printf("books data: %+v\n", booksResult.Data)
+	fmt.Printf("books error: %+v\n", booksResult.Error)
+
+	// Fetch one book.
+	fetchBook := NewFetcher[Response[Book], Response[any]](baseURL + "/books/%d")
+	bookResult, err := fetchBook.Fetch(context.Background(), 1)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println()
+	fmt.Printf("books data: %+v\n", bookResult.Data)
+	fmt.Printf("books error: %+v\n", bookResult.Error)
+
+	// Fetch non-existing book.
+	bookResult, err = fetchBook.Fetch(context.Background(), -1)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println()
+	fmt.Printf("books data: %+v\n", bookResult.Data)
+	fmt.Printf("books error: %+v\n", bookResult.Error)
+}
+
+type Result[T any, E any] struct {
+	Data  T
+	Error E
+}
+
+type Fetcher[T any, E any] struct {
+	url string
+}
+
+func NewFetcher[T any, E any](url string) *Fetcher[T, E] {
+	return &Fetcher[T, E]{
+		url: url,
+	}
+}
+
+func (f *Fetcher[T, E]) Fetch(ctx context.Context, args ...any) (*Result[T, E], error) {
+	resp, err := http.Get(fmt.Sprintf(f.url, args...))
+	if err != nil {
+		panic(err)
+	}
+	defer resp.Body.Close()
+
+	result := new(Result[T, E])
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		var t T
+		if err := json.NewDecoder(resp.Body).Decode(&t); err != nil {
+			return nil, err
+		}
+		result.Data = t
+	} else if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+		var e E
+		if err := json.NewDecoder(resp.Body).Decode(&e); err != nil {
+			return nil, err
+		}
+		result.Error = e
+	} else {
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+
+		return nil, errors.New(string(body))
+	}
+
+	return result, nil
+}
+```
