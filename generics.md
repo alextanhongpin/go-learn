@@ -1,3 +1,6 @@
+
+Let's explore the usecases for generics. Not all implementation here are idiomatic, so take it with a grain of salt. We will not explore implementation of generic Set, Map and Slice since they are pretty common.
+
 # Generic Set
 ```go
 // You can edit this code!
@@ -93,36 +96,234 @@ func mapR[T any, R any](in []T, fn func(T) R) []R {
 }
 ```
 
-## Pointer and value receiver
+## Generic Pointer/Value method
 
+```go
+func Pointer[T comparable](t T) *T {
+	return &t
+}
+
+func Value[T comparable](t *T) (res T, ok bool) {
+	if t == nil {
+		return
+	}
+	
+	return *t, true
+}
+```
+
+## Field-level hook
+
+There are some limitation when using generics
+
+1) generic type cannot be applied on struct methods
 
 ```go
 // You can edit this code!
 // Click here and start typing.
 package main
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+	"reflect"
+	"strings"
+)
+
+func StructFields(in interface{}) func() *Required {
+	t := reflect.Indirect(reflect.ValueOf(in)).Type()
+
+	fields := make([]string, t.NumField())
+	for i := 0; i < t.NumField(); i++ {
+		fields[i] = t.Field(i).Name
+	}
+
+	return func() *Required {
+		return NewRequired(fields[0], fields[1:]...)
+	}
+}
+
+var UserFields = StructFields(&User{})
 
 func main() {
-	msg := "hello world"
-	msgp := Reference(msg)
-	fmt.Println(msgp)
-	fmt.Println(Value(msgp))
-	fmt.Println(Value((*string)(nil)))
+	required := UserFields()
+
+	var u User
+	u.Name = Hook("Name", "john", required.Set)
+	u.Age = Hook("Age", 10, required.Set)
+	// u.Married = Hook("Married", true, required.Set)
+
+	fmt.Println(required.Error()) // missing fields: Married
 }
 
-func Reference[T any](t T) *T {
-	return &t
+type User struct {
+	Name    string
+	Age     int
+	Married bool
 }
 
-func Value[T any](t *T) (T, bool) {
-	if t == nil {
-		var tt T
-		return tt, false
+func Hook[T any](name string, t T, fn func(name string)) T {
+	fn(name)
+	return t
+}
+
+var ErrMissingFields = errors.New("missing fields")
+
+type Required struct {
+	fields []string
+	value  map[string]bool
+}
+
+func NewRequired(field string, fields ...string) *Required {
+	fields = append(fields, field)
+	value := make(map[string]bool)
+	for _, field := range fields {
+		value[field] = false
 	}
-	return *t, true
+	return &Required{
+		fields: fields,
+		value:  value,
+	}
+}
+
+func (r *Required) Set(name string) {
+	r.value[name] = true
+}
+
+func (r *Required) Valid() bool {
+	for _, field := range r.fields {
+		if !r.value[field] {
+			return false
+		}
+	}
+	return len(r.fields) == len(r.value)
+}
+
+func (r *Required) Error() error {
+	missing := make([]string, 0, len(r.fields))
+	for _, field := range r.fields {
+		if !r.value[field] {
+			missing = append(missing, field)
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("%w: %s", ErrMissingFields, strings.Join(missing, ", "))
+	}
+
+	return nil
 }
 ```
+
+## Generic Builder
+
+This example below is not idiomatic go, use it only if it fits your usecase. 
+
+There are some limitations for this approach:
+- private fields cannot be inferred through reflection
+- no type safety
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"reflect"
+	"strings"
+)
+
+type User struct {
+	Name    string
+	Age     int
+	Married bool
+}
+
+var UserBuilder = BuilderFactory(&User{})
+
+func main() {
+	b := UserBuilder()
+	user, err := b.Set("Name", "john").
+		Set("Age", 10).
+		Set("Married", true).
+		Build()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(user)
+}
+
+var ErrMissingFields = errors.New("missing fields")
+
+func BuilderFactory[T any](in T) func() *Builder[T] {
+	t := reflect.Indirect(reflect.ValueOf(in)).Type()
+
+	fields := make([]string, t.NumField())
+	for i := 0; i < t.NumField(); i++ {
+		fields[i] = t.Field(i).Name
+	}
+
+	return func() *Builder[T] {
+		return NewBuilder[T](fields...)
+	}
+}
+
+type Builder[T any] struct {
+	fields map[string]bool
+	values map[string]interface{}
+}
+
+func NewBuilder[T any](requiredFields ...string) *Builder[T] {
+	fields := make(map[string]bool)
+	for _, f := range requiredFields {
+		fields[f] = false
+	}
+	return &Builder[T]{
+		values: make(map[string]interface{}),
+		fields: fields,
+	}
+}
+
+func (b *Builder[T]) Set(key string, value interface{}) *Builder[T] {
+	if _, exists := b.fields[key]; exists {
+		b.fields[key] = true
+	}
+	b.values[key] = value
+	return b
+}
+
+func (b *Builder[T]) Build() (t T, err error) {
+	var missing []string
+	for field, set := range b.fields {
+		if !set {
+			missing = append(missing, field)
+		}
+	}
+	if len(missing) > 0 {
+		return t, fmt.Errorf("%w: %s", ErrMissingFields, strings.Join(missing, ", "))
+	}
+
+	bt, err := json.Marshal(b.values)
+	if err != nil {
+		return t, err
+	}
+
+	dec := json.NewDecoder(bytes.NewReader(bt))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&t); err != nil {
+		return t, err
+	}
+
+	return
+}
+```
+
+
+## Builder v2
+
 
 ## Generic Middleware
 
