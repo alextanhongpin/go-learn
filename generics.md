@@ -1,10 +1,14 @@
+# Golang Generics
 
-Let's explore the usecases for generics. Not all implementation here are idiomatic, so take it with a grain of salt. We will not explore implementation of generic Set, Map and Slice since they are pretty common.
+Generics has been introduced in golang 1.18. Writing generics code can lead to less code with the same clarity. We will explore some real-world examples of generics below. 
 
-# Generic Set
+Not all implementations here are idiomatic, so take it with a grain of salt. 
+
+## Generic Set
+
+Sets has many applications when designing applications. With generics, we do not need to implement Set for all the different types.
+
 ```go
-// You can edit this code!
-// Click here and start typing.
 package main
 
 import "fmt"
@@ -62,7 +66,42 @@ func (s Set[T]) List() []T {
 }
 ```
 
-## Generic Map
+## Generic Pointer/Value method
+
+You can save a few lines of code by implementing a pointer/value methods.
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import "fmt"
+
+func main() {
+	// Converts a string to string pointer.
+	fmt.Println(Pointer("hello world"))
+
+	// Checks if the value is set, otherwise returns a bool indicating it is not set and the default value.
+	var age *int
+	fmt.Println(Value(age))
+}
+
+func Pointer[T comparable](t T) *T {
+	return &t
+}
+
+func Value[T comparable](t *T) (res T, ok bool) {
+	if t == nil {
+		return
+	}
+
+	return *t, true
+}
+```
+
+## Generic Proxy
+
+We can implement something similar to proxy with generics. For example, you may want to be able to print the information closer to a given struct. 
 
 ```go
 // You can edit this code!
@@ -73,50 +112,23 @@ import "fmt"
 
 type User struct {
 	Name string
-	Age  int
 }
 
 func main() {
-	users := []User{
-		{"John", 10},
-		{"Jane", 20},
+	u := User{
+		Name: Debug("john", "Debugging name:"),
 	}
-	ages := mapR(users, func(u User) int {
-		return u.Age
-	})
-	fmt.Println(ages)
+	fmt.Println(u)
 }
 
-func mapR[T any, R any](in []T, fn func(T) R) []R {
-	res := make([]R, len(in))
-	for i, k := range in {
-		res[i] = fn(k)
-	}
-	return res
+func Debug[T any](t T, args ...any) T {
+	args = append(args, t)
+	fmt.Println(args...)
+	return t
 }
 ```
 
-## Generic Pointer/Value method
-
-```go
-func Pointer[T comparable](t T) *T {
-	return &t
-}
-
-func Value[T comparable](t *T) (res T, ok bool) {
-	if t == nil {
-		return
-	}
-	
-	return *t, true
-}
-```
-
-## Field-level hook
-
-There are some limitation when using generics
-
-1) generic type cannot be applied on struct methods
+The example below demonstrates how to implement struct to check if the given fields are set for a given object.
 
 ```go
 // You can edit this code!
@@ -139,7 +151,15 @@ func StructFields(in interface{}) func() *Required {
 	}
 
 	return func() *Required {
-		return NewRequired(fields[0], fields[1:]...)
+		var rest []string
+		switch len(fields) {
+		case 0:
+			panic("zero fields")
+		case 1:
+		default:
+			rest = fields[1:]
+		}
+		return NewRequired(fields[0], rest...)
 	}
 }
 
@@ -245,8 +265,8 @@ type User struct {
 var UserBuilder = BuilderFactory(&User{})
 
 func main() {
-	b := UserBuilder()
-	user, err := b.Set("Name", "john").
+	user, err := UserBuilder().
+		Set("Name", "john").
 		Set("Age", 10).
 		Set("Married", true).
 		Build()
@@ -254,6 +274,16 @@ func main() {
 		panic(err)
 	}
 	fmt.Println(user)
+
+	user2, err := UserBuilder().SetMap(map[string]interface{}{
+		"Name":    "jane",
+		"Age":     13,
+		"Married": false,
+	}).Build()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(user2)
 }
 
 var ErrMissingFields = errors.New("missing fields")
@@ -292,6 +322,13 @@ func (b *Builder[T]) Set(key string, value interface{}) *Builder[T] {
 		b.fields[key] = true
 	}
 	b.values[key] = value
+	return b
+}
+
+func (b *Builder[T]) SetMap(m map[string]interface{}) *Builder[T] {
+	for k, v := range m {
+		b.Set(k, v)
+	}
 	return b
 }
 
