@@ -4,6 +4,224 @@ Generics has been introduced in golang 1.18. Writing generics code can lead to l
 
 Not all implementations here are idiomatic, so take it with a grain of salt. 
 
+
+## Returning self
+
+Before generics, the following is not possible. The function below does not provide much value except to prove what is possible with generics.
+
+In short
+
+
+> generics allows you to accept any arbitrary type
+> generics allows you to return any arbitrary type
+> generics allows you to accept and return any arbitrary type
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import "fmt"
+
+func main() {
+	self := Self(1)
+	debugInt(self)
+
+	selfAny := SelfAny(1)
+	debugInt(selfAny)
+	/* Output
+	./prog.go:12:11: cannot use selfAny (variable of type any) as type int in argument to debugInt:
+	need type assertion
+
+	Go build failed.
+	*/
+}
+
+func Self[T any](t T) T {
+	return t
+}
+
+func SelfAny(t any) any {
+	return t
+}
+
+func debugInt(n int) {
+	fmt.Println(n)
+}
+```
+
+## Typed functions
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+)
+
+func main() {
+	// Compiles.
+	_ = New[string]()
+	_ = New[int]()
+	_ = New[bool]()
+}
+
+// New returns a pointer to any generic type.
+// This is to demonstrate we do not need to pass the type T as the argument.
+func New[T any]() *T {
+	return new(T)
+}
+```
+
+## Generic func
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+)
+
+func main() {
+	s, err := Unmarshal[string]([]byte(`"hello"`))
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(s)
+
+	u, err := Unmarshal[User]([]byte(`{"name": "john", "age": 10}`))
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(u)
+}
+
+type User struct {
+	Name string `json:"name"`
+	Age  int    `json:"age"`
+}
+
+// We can take the example above to reduce typing on some common functions.
+func Unmarshal[T any](raw []byte) (t T, err error) {
+	err = json.Unmarshal(raw, &t)
+	return
+}
+```
+
+## Type converters
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+)
+
+func main() {
+	u, err := Convert[*User](&CreateUserDto{
+		Name: "john",
+		Age:  13,
+	})
+	if err != nil {
+		panic(err)
+	}
+	debugUser(u)
+}
+
+func debugUser(u *User) {
+	fmt.Printf("%s is %d years old", u.Name, u.Age)
+}
+
+type User struct {
+	Name string `json:"name"`
+	Age  int    `json:"age"`
+}
+
+type CreateUserDto struct {
+	Name string `json:"name"`
+	Age  int    `json:"age"`
+}
+
+// We can take the example above to reduce typing on some common functions.
+func Convert[T any](src any) (t T, err error) {
+	b, err := json.Marshal(src)
+	if err != nil {
+		return t, err
+	}
+
+	err = json.Unmarshal(b, &t)
+	return
+}
+```
+
+## Generic Tuple
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"fmt"
+
+	"play.ground/tuple"
+)
+
+type Name string
+type Age int
+type Channel int
+
+func main() {
+	john := tuple.New2[Name, Age]("john", 23)
+	fmt.Println(john.T0, john.T1)
+
+	john2 := tuple.New2[Name, Age]("john", 23)
+	fmt.Println(john == john2)
+
+	rgb := tuple.New3[Channel, Channel, Channel](255, 255, 255)
+	fmt.Println(rgb)
+
+	var box tuple.Tuple3[int, int, int]
+	box.T0 = 10
+	box.T1 = 11
+	box.T2 = 12
+	fmt.Println(box)
+}
+
+-- go.mod --
+module play.ground
+-- tuple/tuple.go --
+package tuple
+
+type Tuple2[T0, T1 comparable] struct {
+	T0 T0
+	T1 T1
+}
+
+func New2[T0, T1 comparable](t0 T0, t1 T1) Tuple2[T0, T1] {
+	return Tuple2[T0, T1]{T0: t0, T1: t1}
+}
+
+type Tuple3[T0, T1, T2 comparable] struct {
+	T0 T0
+	T1 T1
+	T2 T2
+}
+
+func New3[T0, T1, T2 comparable](t0 T0, t1 T1, t2 T2) Tuple3[T0, T1, T2] {
+	return Tuple3[T0, T1, T2]{T0: t0, T1: t1, T2: t2}
+}
+```
+
 ## Generic Set
 
 Sets has many applications when designing applications. With generics, we do not need to implement Set for all the different types.
