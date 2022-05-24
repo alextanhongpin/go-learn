@@ -2,19 +2,15 @@
 
 Generics has been introduced in golang 1.18. Writing generics code can lead to less code with the same clarity. We will explore some real-world examples of generics below. 
 
-Not all implementations here are idiomatic, so take it with a grain of salt. 
+Not all implementations here are idiomatic, so take it with a grain of salt. We will explore what generics allow you to do, which is mainly
 
+- generics allows you to accept any arbitrary type
+- generics allows you to return any arbitrary type
+- generics allows you to accept and return any arbitrary type
 
 ## Returning self
 
 Before generics, the following is not possible. The function below does not provide much value except to prove what is possible with generics.
-
-In short
-
-
-> generics allows you to accept any arbitrary type
-> generics allows you to return any arbitrary type
-> generics allows you to accept and return any arbitrary type
 
 ```go
 // You can edit this code!
@@ -151,7 +147,7 @@ type CreateUserDto struct {
 	Age  int    `json:"age"`
 }
 
-// We can take the example above to reduce typing on some common functions.
+// Convert any type to type T
 func Convert[T any](src any) (t T, err error) {
 	b, err := json.Marshal(src)
 	if err != nil {
@@ -224,7 +220,7 @@ func New3[T0, T1, T2 comparable](t0 T0, t1 T1, t2 T2) Tuple3[T0, T1, T2] {
 
 ## Generic Set
 
-Sets has many applications when designing applications. With generics, we do not need to implement Set for all the different types.
+Sets has many applications when designing applications. With generics, we do not need to implement Set for all the different types. Note that the example below is not complete, there are several set methods that are still missing such as `Difference`, `Union` etc.
 
 ```go
 package main
@@ -576,11 +572,13 @@ func (b *Builder[T]) Build() (t T, err error) {
 }
 ```
 
+## Generic Decorators
 
-## Builder v2
-
-
-## Generic Middleware
+We can now implement most of the service layer decorators with generics such as
+- retries
+- logging
+- performance hooks
+- authentication/authorization layer
 
 ```go
 // You can edit this code!
@@ -626,8 +624,7 @@ func AddPronoun(pronoun string, fn Decorator[string, int]) Decorator[string, int
 }
 ```
 
-
-## Generic Decorators
+Retry example:
 
 ```go
 // You can edit this code!
@@ -672,7 +669,182 @@ func Retry[R any, W any](fn AnyFunc[R, W], n int) AnyFunc[R, W] {
 }
 ```
 
-### Generic Slice
+
+## Service Hooks
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"math/rand"
+	"strings"
+	"time"
+
+	"play.ground/service"
+)
+
+type Person struct {
+	Salutation string
+	Name       string
+}
+
+func main() {
+	hook := service.New[string, *Person](GreetError)
+	// hook := service.New[string, *Person](Greet)
+	hook.Prepend(Precondition)
+	hook.Append(Postcondition)
+	hook.Decorate(
+		Log[string, *Person], // Order matters. 
+		Retry[string, *Person](3),
+	)
+	res, err := hook.Handle(context.Background(), "john")
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(res)
+}
+
+func Precondition(ctx context.Context, name string) (string, error) {
+	if name == "" {
+		return "", errors.New("required")
+	}
+	return name, nil
+}
+
+func Postcondition(ctx context.Context, person *Person) (*Person, error) {
+	if !strings.EqualFold(person.Salutation, "Mr.") {
+		return nil, errors.New("missing prefix")
+	}
+	return person, nil
+}
+
+func Greet(ctx context.Context, name string) (*Person, error) {
+	return &Person{
+		Salutation: "Mr.",
+		Name:       name,
+	}, nil
+}
+
+func GreetError(ctx context.Context, name string) (*Person, error) {
+	return nil, errors.New("bad person")
+}
+
+func Log[Req any, Res any](fn service.Handler[Req, Res]) service.Handler[Req, Res] {
+	return func(ctx context.Context, req Req) (Res, error) {
+		start := time.Now()
+		defer func() {
+			fmt.Println(time.Since(start))
+		}()
+		return fn(ctx, req)
+	}
+}
+
+func Retry[Req any, Res any](n int) service.Decorator[Req, Res] {
+	return func(fn service.Handler[Req, Res]) service.Handler[Req, Res] {
+		return func(ctx context.Context, req Req) (res Res, err error) {
+			for i := 0; i < n; i++ {
+				res, err = fn(ctx, req)
+				if err == nil {
+					return res, err
+				}
+
+				ms := (i + 1) * 1000
+				ms = rand.Intn(ms) + ms/2
+				fmt.Printf("sleep for %d ms\n", ms)
+				time.Sleep(time.Duration(ms) * time.Millisecond)
+			}
+			err = fmt.Errorf("%w: too many retries")
+			return
+		}
+	}
+}
+-- go.mod --
+module play.ground
+-- service/service.go --
+package service
+
+import (
+	"context"
+)
+
+type Handler[Req any, Res any] func(ctx context.Context, req Req) (Res, error)
+
+type Decorator[Req any, Res any] func(h Handler[Req, Res]) Handler[Req, Res]
+
+type Func[T any] func(ctx context.Context, t T) (T, error)
+
+type Hook[Req any, Res any] struct {
+	handle     Handler[Req, Res]
+	before     []Func[Req]
+	after      []Func[Res]
+	decorators []Decorator[Req, Res]
+}
+
+func New[Req any, Res any](fn Handler[Req, Res]) *Hook[Req, Res] {
+	return &Hook[Req, Res]{
+		handle: fn,
+	}
+}
+
+func (hook *Hook[Req, Res]) Decorate(fns ...Decorator[Req, Res]) {
+	hook.decorators = append(hook.decorators, fns...)
+}
+
+func (hook *Hook[Req, Res]) Append(fns ...Func[Res]) {
+	hook.after = append(hook.after, fns...)
+}
+
+func (hook *Hook[Req, Res]) Prepend(fns ...Func[Req]) {
+	hook.before = append(hook.before, fns...)
+}
+
+func (hook *Hook[Req, Res]) Handle(ctx context.Context, req Req) (res Res, err error) {
+	for _, fn := range hook.before {
+		req, err = fn(ctx, req)
+		if err != nil {
+			return
+		}
+	}
+
+	decorated := hook.handle
+	for _, decorator := range Reverse(hook.decorators) {
+		decorated = decorator(decorated)
+	}
+
+	res, err = decorated(ctx, req)
+	if err != nil {
+		return
+	}
+
+	for _, fn := range hook.after {
+		res, err = fn(ctx, res)
+		if err != nil {
+			return
+		}
+	}
+	return
+}
+
+func Reverse[T any](slice []T) []T {
+	result := make([]T, len(slice))
+	copy(result, slice)
+
+	for i, j := 0, len(result)-1; i < j; i, j = i+1, j-1 {
+		result[i], result[j] = result[j], result[i]
+	}
+	return result
+}
+```
+
+
+### Adding type information for non generic function
+
+Not all standard libraries uses generics yet. We can `curry` those functions for better type-safety.
 
 ```go
 // You can edit this code!
@@ -700,7 +872,58 @@ func TypedFunc[T any](fn func(any) error) func(T) error {
 }
 ```
 
-### Generic Filter
+## Typed template
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"bytes"
+	"fmt"
+	"html/template"
+	"io"
+	"os"
+)
+
+var greet = MakeTemplate[*Greet](`Hi, {{.Name}}`)
+var welcome = MakeTemplate[*Person](`Welcome {{.Name}}!`)
+
+type Greet struct {
+	Name string
+}
+
+type Person struct {
+	Name string
+}
+
+func main() {
+	if err := greet(os.Stdout, &Greet{"John"}); err != nil {
+		panic(err)
+	}
+
+	b := bytes.NewBuffer(nil)
+	
+	// Template is strongly typed now.
+	// ./prog.go:30:23: cannot use &Greet{…} (value of type *Greet) as type *Person in argument to welcome
+	// if err := welcome(b, &Greet{Name: "John"}); err != nil {
+	if err := welcome(b, &Person{Name: "John"}); err != nil {
+		panic(err)
+	}
+	fmt.Println()
+	fmt.Println(b.String())
+}
+
+func MakeTemplate[T any](body string) func(io.Writer, T) error {
+	tpl := template.Must(template.New("").Parse(body))
+	return func(wr io.Writer, data T) error {
+		return tpl.Execute(wr, data)
+	}
+}
+```
+
+### Generic Slice
 
 ```go
 // You can edit this code!
@@ -788,53 +1011,7 @@ func FindIndex[T any](list []T, fn func(T) bool) (index int, found bool) {
 	return
 }
 
-
-```
-
-## Generic Slice
-
-```go
-// You can edit this code!
-// Click here and start typing.
-package main
-
-import "fmt"
-
-type Person struct {
-	_    struct{}
-	name string
-	age  int
-}
-
-func main() {
-	fmt.Println("Hello, 世界")
-	numbers := []int{1, 2, 3, 4, 5}
-	greaterThree := Filter(numbers, func(i int) bool {
-		return i > 3
-	})
-	fmt.Println(greaterThree)
-
-	people := []Person{
-		{name: "john", age: 10},
-		{name: "jane", age: 20},
-	}
-	personByName := ToMap(people, func(p Person) string {
-		return p.name
-	})
-	fmt.Println(personByName)
-}
-
-func Filter[T any](list []T, fn func(T) bool) []T {
-	result := make([]T, 0, len(list))
-	for _, item := range list {
-		if fn(item) {
-			result = append(result, item)
-		}
-	}
-	return result
-}
-
-func ToMap[K comparable, V any](list []V, getKeyFn func(V) K) map[K]V {
+func Group[K comparable, V any](list []V, getKeyFn func(V) K) map[K]V {
 	result := make(map[K]V)
 	for _, item := range list {
 		key := getKeyFn(item)
@@ -848,40 +1025,8 @@ func ToMap[K comparable, V any](list []V, getKeyFn func(V) K) map[K]V {
 }
 ```
 
-## Some more generic slice
-```go
-// You can edit this code!
-// Click here and start typing.
-package main
 
-import "fmt"
-
-func main() {
-	fmt.Println(Slice[int]{}.FillZero(3))
-	fmt.Println(Slice[bool]{}.FillZero(3))
-}
-
-func Echo[T any](fn func() T) T {
-	return fn()
-}
-
-type Slice[T any] []T
-
-func (s Slice[T]) FillFunc(n int, fill func() T) []T {
-	result := make([]T, n)
-	for i := 0; i < n; i++ {
-		result[i] = fill()
-	}
-	return result
-}
-
-func (s Slice[T]) FillZero(n int) []T {
-	result := make([]T, n)
-	return result
-}
-```
-
-## Setter getter again
+## Setter getter
 
 ```go
 // You can edit this code!
@@ -1129,277 +1274,6 @@ func (g *Getter[T]) UnmarshalJSON(raw []byte) error {
 	return nil
 }
 ```
-
-## Type Converter
-
-```go
-// You can edit this code!
-// Click here and start typing.
-package main
-
-import (
-	"encoding/json"
-	"fmt"
-)
-
-type CreateUserRequest struct {
-	Name string `json:"name"`
-	Age  int    `json:"age"`
-}
-
-type User struct {
-	Name string `json:"name"`
-	Age  int    `json:"age"`
-}
-
-func main() {
-	req := CreateUserRequest{
-		Name: "john",
-		Age:  13,
-	}
-	user, err := TypeConverter[User](req)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(user)
-}
-
-func TypeConverter[T any](s any) (T, error) {
-	var t T
-	b, err := json.Marshal(s)
-	if err != nil {
-		return t, err
-	}
-	if err := json.Unmarshal(b, &t); err != nil {
-		return t, err
-	}
-	return t, nil
-}
-```
-
-## Typed template
-
-```go
-// You can edit this code!
-// Click here and start typing.
-package main
-
-import (
-	"bytes"
-	"fmt"
-	"html/template"
-	"io"
-	"os"
-)
-
-var greet = MakeTemplate[*Greet](`Hi, {{.Name}}`)
-var welcome = MakeTemplate[*Person](`Welcome {{.Name}}!`)
-
-type Greet struct {
-	Name string
-}
-
-type Person struct {
-	Name string
-}
-
-func main() {
-	if err := greet(os.Stdout, &Greet{"John"}); err != nil {
-		panic(err)
-	}
-
-	b := bytes.NewBuffer(nil)
-	
-	// Template is strongly typed now.
-	// ./prog.go:30:23: cannot use &Greet{…} (value of type *Greet) as type *Person in argument to welcome
-	// if err := welcome(b, &Greet{Name: "John"}); err != nil {
-	if err := welcome(b, &Person{Name: "John"}); err != nil {
-		panic(err)
-	}
-	fmt.Println()
-	fmt.Println(b.String())
-}
-
-func MakeTemplate[T any](body string) func(io.Writer, T) error {
-	tpl := template.Must(template.New("").Parse(body))
-	return func(wr io.Writer, data T) error {
-		return tpl.Execute(wr, data)
-	}
-}
-```
-
-## Service Hooks
-
-```go
-// You can edit this code!
-// Click here and start typing.
-package main
-
-import (
-	"context"
-	"errors"
-	"fmt"
-	"math/rand"
-	"strings"
-	"time"
-
-	"play.ground/service"
-)
-
-type Person struct {
-	Salutation string
-	Name       string
-}
-
-func main() {
-	hook := service.New[string, *Person](GreetError)
-	// hook := service.New[string, *Person](Greet)
-	hook.Prepend(Precondition)
-	hook.Append(Postcondition)
-	hook.Decorate(
-		Log[string, *Person], // Order matters. 
-		Retry[string, *Person](3),
-	)
-	res, err := hook.Handle(context.Background(), "john")
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(res)
-}
-
-func Precondition(ctx context.Context, name string) (string, error) {
-	if name == "" {
-		return "", errors.New("required")
-	}
-	return name, nil
-}
-
-func Postcondition(ctx context.Context, person *Person) (*Person, error) {
-	if !strings.EqualFold(person.Salutation, "Mr.") {
-		return nil, errors.New("missing prefix")
-	}
-	return person, nil
-}
-
-func Greet(ctx context.Context, name string) (*Person, error) {
-	return &Person{
-		Salutation: "Mr.",
-		Name:       name,
-	}, nil
-}
-
-func GreetError(ctx context.Context, name string) (*Person, error) {
-	return nil, errors.New("bad person")
-}
-
-func Log[Req any, Res any](fn service.Handler[Req, Res]) service.Handler[Req, Res] {
-	return func(ctx context.Context, req Req) (Res, error) {
-		start := time.Now()
-		defer func() {
-			fmt.Println(time.Since(start))
-		}()
-		return fn(ctx, req)
-	}
-}
-
-func Retry[Req any, Res any](n int) service.Decorator[Req, Res] {
-	return func(fn service.Handler[Req, Res]) service.Handler[Req, Res] {
-		return func(ctx context.Context, req Req) (res Res, err error) {
-			for i := 0; i < n; i++ {
-				res, err = fn(ctx, req)
-				if err == nil {
-					return res, err
-				}
-
-				ms := (i + 1) * 1000
-				ms = rand.Intn(ms) + ms/2
-				fmt.Printf("sleep for %d ms\n", ms)
-				time.Sleep(time.Duration(ms) * time.Millisecond)
-			}
-			err = fmt.Errorf("%w: too many retries")
-			return
-		}
-	}
-}
--- go.mod --
-module play.ground
--- service/service.go --
-package service
-
-import (
-	"context"
-)
-
-type Handler[Req any, Res any] func(ctx context.Context, req Req) (Res, error)
-
-type Decorator[Req any, Res any] func(h Handler[Req, Res]) Handler[Req, Res]
-
-type Func[T any] func(ctx context.Context, t T) (T, error)
-
-type Hook[Req any, Res any] struct {
-	handle     Handler[Req, Res]
-	before     []Func[Req]
-	after      []Func[Res]
-	decorators []Decorator[Req, Res]
-}
-
-func New[Req any, Res any](fn Handler[Req, Res]) *Hook[Req, Res] {
-	return &Hook[Req, Res]{
-		handle: fn,
-	}
-}
-
-func (hook *Hook[Req, Res]) Decorate(fns ...Decorator[Req, Res]) {
-	hook.decorators = append(hook.decorators, fns...)
-}
-
-func (hook *Hook[Req, Res]) Append(fns ...Func[Res]) {
-	hook.after = append(hook.after, fns...)
-}
-
-func (hook *Hook[Req, Res]) Prepend(fns ...Func[Req]) {
-	hook.before = append(hook.before, fns...)
-}
-
-func (hook *Hook[Req, Res]) Handle(ctx context.Context, req Req) (res Res, err error) {
-	for _, fn := range hook.before {
-		req, err = fn(ctx, req)
-		if err != nil {
-			return
-		}
-	}
-
-	decorated := hook.handle
-	for _, decorator := range Reverse(hook.decorators) {
-		decorated = decorator(decorated)
-	}
-
-	res, err = decorated(ctx, req)
-	if err != nil {
-		return
-	}
-
-	for _, fn := range hook.after {
-		res, err = fn(ctx, res)
-		if err != nil {
-			return
-		}
-	}
-	return
-}
-
-func Reverse[T any](slice []T) []T {
-	result := make([]T, len(slice))
-	copy(result, slice)
-
-	for i, j := 0, len(result)-1; i < j; i, j = i+1, j-1 {
-		result[i], result[j] = result[j], result[i]
-	}
-	return result
-}
-```
-
-
 
 
 ### Base Value Object
@@ -1660,6 +1534,8 @@ func (v *Value[T]) UnmarshalJSON(raw []byte) error {
 
 ## Generic HTTP Fetch
 
+You don't need to write a new method now when fetching different entities.
+
 `server.go`:
 ```go
 package main
@@ -1918,6 +1794,8 @@ func Fetch[T any, E any](ctx context.Context, url string, args ...any) (*Result[
 ```
 
 ### Promise all
+
+Concurrency is even easier now with generics.
 
 ```go
 // You can edit this code!
