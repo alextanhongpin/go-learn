@@ -1916,3 +1916,68 @@ func Fetch[T any, E any](ctx context.Context, url string, args ...any) (*Result[
 	return result, nil
 }
 ```
+
+### Promise all
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"fmt"
+	"math/rand"
+	"sync"
+	"time"
+)
+
+func main() {
+	task := func() (int, error) {
+		id := rand.Intn(10)
+
+		fmt.Println("doing work:", id)
+
+		time.Sleep(1 * time.Second)
+
+		fmt.Println("done:", id)
+
+		return id, nil
+	}
+
+	result := PromiseAll[int](task, task)
+	for _, res := range result {
+		fmt.Println(res.Data)
+	}
+}
+
+type Result[T any] struct {
+	Data  T
+	Error error
+}
+
+type Task[T any] func() (T, error)
+
+func PromiseAll[T any](tasks ...Task[T]) []Result[T] {
+	if len(tasks) == 0 {
+		return nil
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(len(tasks))
+
+	result := make([]Result[T], len(tasks))
+
+	for i, _ := range tasks {
+		go func(pos int) {
+			defer wg.Done()
+
+			t, err := tasks[pos]()
+			result[pos] = Result[T]{Data: t, Error: err}
+		}(i)
+	}
+
+	wg.Wait()
+
+	return result
+}
+```
