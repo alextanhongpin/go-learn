@@ -37,6 +37,9 @@ func main() {
 	sch.Schedule("smile", time.Now().Add(4*time.Second), func() {
 		fmt.Println("after: :)")
 	})
+	sch.Schedule("cry", time.Now().Add(6*time.Second), func() {
+		fmt.Println("after: :'(")
+	})
 	time.Sleep(3 * time.Second)
 
 	fmt.Println("any tasks left?")
@@ -108,6 +111,15 @@ func (s *Scheduler) loop() {
 	for {
 		select {
 		case <-s.done:
+			s.tasks.Range(func(key, value any) bool {
+				task, ok := value.(*Task)
+				if !ok {
+					return ok
+				}
+				fmt.Println("clearing", key)
+				task.runFunc.Stop()
+				return true
+			})
 			return
 		case task := <-s.scheduleCh:
 			if t, found := s.tasks.LoadAndDelete(task.name); found {
