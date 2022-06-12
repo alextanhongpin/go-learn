@@ -23,14 +23,28 @@ func main() {
 		fmt.Println("after: overwrite")
 	})
 
-	sch.Schedule("sth", time.Now().Add(1*time.Second), func() {
-		fmt.Println("after: something else")
+	sch.Schedule("greet", time.Now().Add(1*time.Second), func() {
+		fmt.Println("after: hi")
 	})
+	sch.Schedule("bark", time.Now().Add(1*time.Second), func() {
+		fmt.Println("after: woof")
+	})
+	sch.Unschedule("bark")
+
 	for _, task := range sch.List(-1) {
 		fmt.Println("list:", task.name, task.runAt.Sub(time.Now()))
 	}
-	time.Sleep(5 * time.Second)
-	fmt.Println("Hello, 世界")
+	sch.Schedule("smile", time.Now().Add(4*time.Second), func() {
+		fmt.Println("after: :)")
+	})
+	time.Sleep(3 * time.Second)
+
+	fmt.Println("any tasks left?")
+	for _, task := range sch.List(-1) {
+		fmt.Println("list:", task.name, task.runAt.Sub(time.Now()))
+	}
+	time.Sleep(2 * time.Second)
+	fmt.Println("program exiting")
 }
 
 type Task struct {
@@ -40,17 +54,19 @@ type Task struct {
 }
 
 type Scheduler struct {
-	tasks      sync.Map
-	ch         chan *Task
-	init, quit sync.Once
-	done       chan struct{}
-	wg         sync.WaitGroup
+	tasks        sync.Map
+	scheduleCh   chan *Task
+	unscheduleCh chan string
+	init, quit   sync.Once
+	done         chan struct{}
+	wg           sync.WaitGroup
 }
 
 func NewScheduler() (*Scheduler, func()) {
 	s := &Scheduler{
-		ch:   make(chan *Task),
-		done: make(chan struct{}),
+		scheduleCh:   make(chan *Task),
+		unscheduleCh: make(chan string),
+		done:         make(chan struct{}),
 	}
 	return s, s.stop
 }
@@ -62,7 +78,18 @@ func (s *Scheduler) Schedule(name string, runAt time.Time, fn func()) bool {
 	select {
 	case <-s.done:
 		return false
-	case s.ch <- &Task{name: name, runAt: runAt, runFunc: time.AfterFunc(runAt.Sub(time.Now()), fn)}:
+	case s.scheduleCh <- &Task{name: name, runAt: runAt, runFunc: time.AfterFunc(runAt.Sub(time.Now()), func() {
+		fn()
+		s.tasks.Delete(name)
+	})}:
+		return true
+	}
+}
+func (s *Scheduler) Unschedule(name string) bool {
+	select {
+	case <-s.done:
+		return false
+	case s.unscheduleCh <- name:
 		return true
 	}
 }
@@ -82,11 +109,15 @@ func (s *Scheduler) loop() {
 		select {
 		case <-s.done:
 			return
-		case task := <-s.ch:
+		case task := <-s.scheduleCh:
 			if t, found := s.tasks.LoadAndDelete(task.name); found {
 				t.(*Task).runFunc.Stop()
 			}
 			_, _ = s.tasks.LoadOrStore(task.name, task)
+		case key := <-s.unscheduleCh:
+			if t, found := s.tasks.LoadAndDelete(key); found {
+				t.(*Task).runFunc.Stop()
+			}
 		}
 	}
 }
@@ -109,6 +140,7 @@ func (s *Scheduler) List(n int) []Task {
 		if !ok {
 			return ok
 		}
+
 		tasks = append(tasks, Task{
 			name:  task.name,
 			runAt: task.runAt,
