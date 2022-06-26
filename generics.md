@@ -8,6 +8,32 @@ Not all implementations here are idiomatic, so take it with a grain of salt. We 
 - generics allows you to return any arbitrary type
 - generics allows you to accept and return any arbitrary type
 
+## Checking type
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import "fmt"
+
+func main() {
+	fmt.Println(Is[User](User{}))
+	fmt.Println(Is[User](true))
+	fmt.Println(Is[bool](true))
+	fmt.Println(Is[string](true))
+}
+
+type User struct {
+	Name string
+}
+
+func Is[T any](v any) bool {
+	_, ok := v.(T)
+	return ok
+}
+```
+
 ## Returning self
 
 Before generics, the following is not possible. The function below does not provide much value except to prove what is possible with generics.
