@@ -2,7 +2,9 @@
 
 - [how ent does it](https://entgo.io/blog/2021/07/01/automatic-graphql-filter-generation/)
 - my own lib [github.com/alextanhongpin/goql](https://github.com/alextanhongpin/goql)
-- alternative is to do code generation base on a type
+- if only one operation per field is supported, we can store the ops separately
+- otherwise, just store the ops separately (op: gte, value:17), (gte: 17)
+- alternative is to do code generation base on a type, e.g
 
 ```go
 type User struct {
@@ -66,7 +68,7 @@ func main() {
 	debug(u)
 
 	v := make(url.Values)
-	v.Set("name", "eq:john appleseed")
+	v.Set("name", "eq:john appleseed") // limited to single op, must be slice to support multiple values
 	v.Set("age", "gt:17")
 	v.Set("married", "eq:true")
 	v.Set("birthday", fmt.Sprintf("gt:%s", time.Now().Format(time.RFC3339)))
