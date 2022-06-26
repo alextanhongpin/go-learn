@@ -1,5 +1,24 @@
 # SQL-Like filters with go
 
+- [how ent does it](https://entgo.io/blog/2021/07/01/automatic-graphql-filter-generation/)
+- my own lib [github.com/alextanhongpin/goql](https://github.com/alextanhongpin/goql)
+- alternative is to do code generation base on a type
+
+```go
+type User struct {
+	Name string
+	Age int
+}
+
+// Produces
+
+type UserFilter struct {
+	NameEq string `json:"name.eq"
+	NameNeq string `json:"name.neq"
+	...
+}
+```
+
 ```go
 // You can edit this code!
 // Click here and start typing.
