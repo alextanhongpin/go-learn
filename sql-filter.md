@@ -248,7 +248,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"time"
+
+	"github.com/gorilla/schema"
 )
 
 func main() {
@@ -279,6 +282,25 @@ func main() {
 
 	// For most cases, this is more than enough, since most SQL lib doesn't check the types.
 	u.Print()
+
+	fmt.Println("\ndecoding url.Values:")
+	dec := schema.NewDecoder()
+
+	v := make(url.Values)
+	v.Set("age.between.left", "17")
+	v.Set("age.between.right", "100")
+	v.Add("name.like", "a%")
+	v.Add("name.like", "b%")
+	v.Add("name.like", "c%")
+	v.Add("createdAt.gt", now.Format(time.RFC3339))
+	v.Add("and.0.name.eq", "jessie")
+	var u2 UserWhere
+	if err := dec.Decode(&u2, v); err != nil {
+		panic(err)
+	}
+	u2.Print()
+
+	fmt.Printf("%+v", *u2.And[0].Name)
 }
 
 type UserWhere struct {
