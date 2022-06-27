@@ -236,3 +236,128 @@ type WhereOp[T any] struct {
 	T  []T    `json:"value"`
 }
 ```
+
+
+## Another version
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"time"
+)
+
+func main() {
+	now := time.Now()
+	now.Add(-24 * time.Hour)
+	b := []byte(fmt.Sprintf(`
+	{
+ 		"age": {
+			"between": {"left": 13, "right": 30}
+  		},
+		"name": {
+			"like": ["a%%", "b%%", "c%%"]
+		},
+		"createdAt": {
+			"gt": %q
+		},
+		"or": [{"age": {"gt": 10}}]
+	}`, now.Format(time.RFC3339)))
+
+	var u UserWhere
+	if err := json.Unmarshal(b, &u); err != nil {
+		panic(err)
+	}
+	fmt.Printf("%+v\n", *u.Age.Between)
+	fmt.Printf("%+v\n", u.Name)
+	fmt.Printf("%+v\n", u.CreatedAt)
+	fmt.Printf("%+v\n\n", u)
+
+	// For most cases, this is more than enough, since most SQL lib doesn't check the types.
+	u.Print()
+}
+
+type UserWhere struct {
+	UserFilter // Perhaps it's better not to embed it here
+	Where[UserFilter]
+	Limit  *int
+	Offset *int
+	Sort   []string
+}
+
+type UserFilter struct {
+	Age       *WhereOp[int]        `json:"age,omitempty"`
+	Name      *WhereOp[string]     `json:"name,omitempty"`
+	CreatedAt *WhereOp[*time.Time] `json:"createdAt,omitempty"`
+}
+
+func (u UserFilter) Print() {
+	if u.Age != nil {
+		for k, v := range u.Age.Values() {
+			fmt.Printf("age %s %v\n", k, v)
+		}
+	}
+	if u.Name != nil {
+		for k, v := range u.Name.Values() {
+			fmt.Printf("name %s %v\n", k, v)
+		}
+	}
+	if u.CreatedAt != nil {
+		for k, v := range u.CreatedAt.Values() {
+			fmt.Printf("createdAt %s %v\n", k, v)
+		}
+	}
+}
+
+type Where[T any] struct {
+	And []T `json:"and,omitempty"`
+	Or  []T `json:"or,omitempty"`
+	Not []T `json:"not,omitempty"`
+}
+
+type Between[T any] struct {
+	Left  T `json:"left,omitempty"`
+	Right T `json:"right,omitempty"`
+}
+
+type WhereOp[T any] struct {
+	Eq      T           `json:"eq,omitempty"`
+	Neq     T           `json:"neq,omitempty"`
+	Lt      T           `json:"lt,omitempty"`
+	Lte     T           `json:"lte,omitempty"`
+	Gt      T           `json:"gt,omitempty"`
+	Gte     T           `json:"gte,omitempty"`
+	Is      *bool       `json:"is,omitempty"`
+	In      []T         `json:"in,omitempty"`
+	Between *Between[T] `json:"between,omitempty"`
+	Like    []T         `json:"like,omitempty"`
+	ILike   []T         `json:"ilike,omitempty"`
+	Not     bool        `json:"not,omitempty"`
+}
+
+func (w *WhereOp[T]) Values() map[string]any {
+	b, err := json.Marshal(w)
+	if err != nil {
+		panic(err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		panic(err)
+	}
+
+	res := make(map[string]any)
+	for k, v := range m {
+		if v == nil {
+			continue
+		}
+		res[k] = v
+	}
+
+	return res
+}
+```
