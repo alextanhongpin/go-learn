@@ -184,3 +184,55 @@ func (w *Where[T]) UnmarshalText(in []byte) error {
 	return w.T.UnmarshalText(vals[1])
 }
 ```
+
+## Alternative
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+)
+
+func main() {
+	var u UserFilter
+	if err := json.Unmarshal([]byte(`
+	{
+		"and": [{"name": {"eq": "john"}}],
+		"or": [{"name": {"neq": "jane"}}]
+	}
+	`), &u); err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("%+v", u)
+}
+
+type User struct {
+	Name Where[string] `json:"name"`
+	// Age  []WhereOp[int] `json:"age"`
+}
+
+type UserFilter struct {
+	And []User
+	Or  []User
+}
+
+type Where[T any] struct {
+	Eq  T   `json:"eq,omitempty"`
+	Neq T   `json:"neq,omitempty"`
+	In  []T `json:"in,omitempty"`
+
+	And []Where[T] `json:"and,omitempty"`
+	Or  []Where[T] `json:"or,omitempty"`
+}
+
+// This is less strongly typed ...
+type WhereOp[T any] struct {
+	Op string `json:"op"`
+	T  []T    `json:"value"`
+}
+```
