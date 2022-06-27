@@ -302,10 +302,10 @@ func main() {
 
 	fmt.Printf("%+v", *u2.And[0].Name)
 }
-
+ // TODO: Change this to where
 type UserWhere struct {
 	UserFilter // Perhaps it's better not to embed it here
-	Where[UserFilter]
+	Where[UserFilter] // TODO: Change this to WhereConj
 	Limit  *int
 	Offset *int
 	Sort   []string
