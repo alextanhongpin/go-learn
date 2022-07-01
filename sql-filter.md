@@ -287,33 +287,58 @@ func main() {
 	dec := schema.NewDecoder()
 
 	v := make(url.Values)
-	v.Set("age.between.left", "17")
-	v.Set("age.between.right", "100")
+	v.Set("age.between.lhs", "17")
+	v.Set("age.between.rhs", "100")
+	v.Add("married.and.0.is", "true")
+	v.Add("married.and.1.isnot", "")
 	v.Add("name.like", "a%")
 	v.Add("name.like", "b%")
 	v.Add("name.like", "c%")
 	v.Add("createdAt.gt", now.Format(time.RFC3339))
 	v.Add("and.0.name.eq", "jessie")
+	v.Add("sort.0.name.asc.nullsfirst", "true")
+
 	var u2 UserWhere
 	if err := dec.Decode(&u2, v); err != nil {
 		panic(err)
 	}
 	u2.Print()
 
-	fmt.Printf("%+v", *u2.And[0].Name)
+	fmt.Printf("%+v\n", *u2.And[0].Name)
+	b, err := json.Marshal(u2)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(string(b))
 }
- // TODO: Change this to where
+
 type UserWhere struct {
 	UserFilter // Perhaps it's better not to embed it here
-	Where[UserFilter] // TODO: Change this to WhereConj
-	Limit  *int
-	Offset *int
-	Sort   []string
+	Where[UserFilter]
+	Limit  *int       `json:"limit,omitempty"`
+	Offset *int       `json:"offset,omitempty"`
+	Sort   []UserSort `json:"sort,omitempty"`
+}
+
+type Sort struct {
+	Asc *struct {
+		NullsFirst bool `json:"nullsfirst,omitempty"`
+		NullsLast  bool `json:"nullslast,omitempty"`
+	} `json:"asc,omitempty"`
+	Desc *struct {
+		NullsFirst bool `json:"nullsfirst,omitempty"`
+		NullsLast  bool `json:"nullslast,omitempty"`
+	} `json:"desc,omitempty"`
+}
+
+type UserSort struct {
+	Name Sort `json:"name"`
 }
 
 type UserFilter struct {
 	Age       *WhereOp[int]        `json:"age,omitempty"`
 	Name      *WhereOp[string]     `json:"name,omitempty"`
+	Married   *WhereOp[*bool]      `json:"married,omitempty"`
 	CreatedAt *WhereOp[*time.Time] `json:"createdAt,omitempty"`
 }
 
@@ -342,23 +367,28 @@ type Where[T any] struct {
 }
 
 type Between[T any] struct {
-	Left  T `json:"left,omitempty"`
-	Right T `json:"right,omitempty"`
+	LHS T `json:"lhs,omitempty"`
+	RHS T `json:"rhs,omitempty"`
 }
 
 type WhereOp[T any] struct {
-	Eq      T           `json:"eq,omitempty"`
-	Neq     T           `json:"neq,omitempty"`
-	Lt      T           `json:"lt,omitempty"`
-	Lte     T           `json:"lte,omitempty"`
-	Gt      T           `json:"gt,omitempty"`
-	Gte     T           `json:"gte,omitempty"`
-	Is      *bool       `json:"is,omitempty"`
-	In      []T         `json:"in,omitempty"`
-	Between *Between[T] `json:"between,omitempty"`
-	Like    []T         `json:"like,omitempty"`
-	ILike   []T         `json:"ilike,omitempty"`
-	Not     bool        `json:"not,omitempty"`
+	Eq       T           `json:"eq,omitempty"`
+	Neq      T           `json:"neq,omitempty"`
+	Lt       T           `json:"lt,omitempty"`
+	Lte      T           `json:"lte,omitempty"`
+	Gt       T           `json:"gt,omitempty"`
+	Gte      T           `json:"gte,omitempty"`
+	Between  *Between[T] `json:"between,omitempty"`
+	Is       *bool       `json:"is,omitempty"`
+	IsNot    *bool       `json:"isnot,omitempty"`
+	In       []T         `json:"in,omitempty"`
+	NotIn    []T         `json:"xin,omitempty"`
+	Like     []T         `json:"like,omitempty"`
+	ILike    []T         `json:"ilike,omitempty"`
+	NotLike  []T         `json:"xlike,omitempty"`
+	NotILike []T         `json:"xilike,omitempty"`
+
+	Where[WhereOp[T]]
 }
 
 func (w *WhereOp[T]) Values() map[string]any {
