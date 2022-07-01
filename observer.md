@@ -68,3 +68,125 @@ func main() {
 	user.Greet("hello!")
 }
 ```
+
+
+## Generic
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log"
+	"reflect"
+	"runtime"
+	"sort"
+)
+
+type Greet struct {
+	Message string
+}
+
+func HandleGreet(ctx context.Context, greet Greet) error {
+	fmt.Println("greetings,", greet.Message)
+
+	return nil
+}
+
+func HandleFormalizedGreet(ctx context.Context, greet Greet) error {
+	fmt.Println("ahem, greetings,", greet.Message)
+
+	return nil
+}
+
+func main() {
+	obs := New[Greet]()
+	if err := obs.On(HandleGreet, HandleFormalizedGreet); err != nil {
+		log.Fatalf("failed to register: %v", err)
+	}
+
+	if err := obs.Emit(context.Background(), Greet{Message: "hello world"}); err != nil {
+		log.Fatalf("failed to emit: %v", err)
+	}
+
+	mgr := &ObserverManager{greet: obs}
+	if err := mgr.Greet(context.Background(), Greet{Message: "hello world"}); err != nil {
+		log.Fatalf("failed to emit: %v", err)
+	}
+}
+
+type ObserverManager struct {
+	greet *Observer[Greet]
+}
+
+func (mgr *ObserverManager) Greet(ctx context.Context, greet Greet) error {
+	return mgr.greet.Emit(ctx, greet)
+}
+
+type GenericHandler[T any] func(ctx context.Context, req T) error
+
+type Observer[T any] struct {
+	handlers map[string]GenericHandler[T]
+}
+
+func New[T any]() *Observer[T] {
+	return &Observer[T]{
+		handlers: make(map[string]GenericHandler[T]),
+	}
+}
+
+func (o *Observer[T]) On(handlers ...GenericHandler[T]) error {
+	for _, handler := range handlers {
+		funcName := GetFunctionName(handler)
+		_, ok := o.handlers[funcName]
+		if ok {
+			return errors.New("handler exists")
+		}
+
+		o.handlers[funcName] = handler
+		fmt.Printf("registered: handler=%s\n", funcName)
+	}
+
+	return nil
+}
+
+func (o *Observer[T]) Emit(ctx context.Context, evt T) error {
+	keys := GetKeys(o.handlers)
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		handler := o.handlers[key]
+		if err := handler(ctx, evt); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func GetFunctionName(i interface{}) string {
+	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
+}
+
+func GetTypeName[T any](unk T) string {
+	t := reflect.TypeOf(unk)
+
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+
+	return t.Name()
+}
+
+func GetKeys[T comparable, U any](m map[T]U) []T {
+	res := make([]T, 0, len(m))
+	for k := range m {
+		res = append(res, k)
+	}
+	return res
+}
+```
