@@ -163,7 +163,7 @@ func main() {
 ```
 
 ## With MarshalJSON
-```
+```go
 package main
 
 import (
@@ -350,4 +350,13 @@ func AddBusinessDays(start time.Time, days int) time.Time {
 	}
 	return start.AddDate(0, 0, weeks*7+addDays)
 }
+```
+
+
+## Start and End of day
+
+```go
+now := time.Now().In(model.GMTe7)
+startOfDay := now.Add(-12 * time.Hour).Round(24 * time.Hour)
+endOfDay := now.Add(24 * time.Hour)
 ```
