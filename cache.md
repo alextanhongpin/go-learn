@@ -224,3 +224,88 @@ func main() {
 	fmt.Println("Hello, playground")
 }
 ```
+
+## Generic Cache
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"sync"
+)
+
+func main() {
+	c := new(Cache)
+	ctx := context.Background()
+	fmt.Println(CacheDecorator("users", c, ListUsers, ctx, &UserFilter{Name: "john"}))
+	fmt.Println(CacheDecorator("users", c, ListUsers, ctx, &UserFilter{Name: "john"}))
+	fmt.Println(CacheDecorator("users", c, ShowUser, ctx, "1"))
+	fmt.Println(CacheDecorator("users", c, ShowUser, ctx, "1"))
+	fmt.Println(CacheDecorator("users", c, ShowUser, ctx, "2"))
+}
+
+type Cacheable[T any, U any] func(ctx context.Context, req T) (U, error)
+
+type Cache struct {
+	sync.Map
+}
+
+func CacheDecorator[T any, U any](prefix string, cache *Cache, fn Cacheable[T, U], ctx context.Context, req T) (u U, err error) {
+	key := fmt.Sprintf("%s:%#v", prefix, req)
+
+	v, found := cache.Load(key)
+	if found {
+		fmt.Println("cache hit", key)
+		if res, ok := v.(U); ok {
+			return res, nil
+		}
+		err = fmt.Errorf("cast error: key=%s, want=%T, got=%T", key, u, v)
+		return
+	}
+
+	val, err := fn(ctx, req)
+	if err != nil {
+		return u, err
+	}
+	v, loaded := cache.LoadOrStore(key, val)
+	if loaded {
+		if res, ok := v.(U); ok {
+			return res, nil
+		}
+
+		err = fmt.Errorf("cast error: key=%s, want=%T, got=%T", key, u, v)
+		return
+	}
+
+	return val, nil
+}
+
+type UserFilter struct {
+	Name string
+}
+
+type User struct {
+	Age  int
+	Name string
+}
+
+func ListUsers(ctx context.Context, filter *UserFilter) ([]User, error) {
+	return nil, nil
+}
+
+func ShowUser(ctx context.Context, id string) (*User, error) {
+	switch id {
+	case "1":
+		return &User{Name: "john", Age: 20}, nil
+	case "2":
+		return &User{Name: "jane", Age: 30}, nil
+	}
+
+	return nil, errors.New("user not found")
+}
+```
