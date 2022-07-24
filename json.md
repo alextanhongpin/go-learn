@@ -37,3 +37,71 @@ func main() {
   data = make([]string, 0)
  }
  ```
+
+
+## JSON Stream
+
+When working with large json (e.g. few MBs to few GBs), using `json.NewDecoder` can be more performant than `json.Unmarshal` since we can partially unmarshal and batch validate the json before further processing.
+
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"log"
+)
+
+var raw = []byte(`{
+	"data": [
+		{"name": "john"},
+		{"name": "jane"}
+	],
+	"meta": {}
+}`)
+
+type Person struct {
+	Name string `json:"name"`
+}
+
+func main() {
+	var result []Person
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	mustDelim(dec, '{')
+	for dec.More() {
+		field, err := dec.Token()
+		if err != nil {
+			panic(err)
+		}
+		if field != "data" {
+			continue
+		}
+		mustDelim(dec, '[')
+		for dec.More() {
+			var p Person
+			if err := dec.Decode(&p); err != nil {
+				panic(err)
+			}
+			result = append(result, p)
+		}
+		mustDelim(dec, ']')
+	}
+	mustDelim(dec, '}')
+	fmt.Println("person", result)
+}
+
+func mustDelim(dec *json.Decoder, delim json.Delim) {
+	token, err := dec.Token()
+	if err != nil {
+		panic(err)
+	}
+	del, ok := token.(json.Delim)
+	if !ok || del != delim {
+		log.Fatalf("expected %v, got %v", delim, del)
+	}
+}
+```
