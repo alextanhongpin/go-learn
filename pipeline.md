@@ -105,3 +105,45 @@ func main() {
 	fmt.Println("out", o.data)
 }
 ```
+
+## Pipeline pattern
+
+To reduce the number of error checks
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import "fmt"
+
+func main() {
+	pipe := New()
+	pipe.Add(func() error { fmt.Println("hello"); return nil })
+	pipe.Add(func() error { fmt.Println("world"); return nil })
+	fmt.Println(pipe.Exec())
+}
+
+type Pipeline struct {
+	funcs []func() error
+}
+
+func New() *Pipeline {
+	return &Pipeline{}
+}
+
+func (p *Pipeline) Add(fn func() error) {
+	p.funcs = append(p.funcs, fn)
+}
+
+func (p *Pipeline) Exec() error {
+	for _, fn := range p.funcs {
+		if err := fn(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+```
