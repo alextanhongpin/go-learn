@@ -102,3 +102,174 @@ func (u *UseCase) Exec(ctx context.Context) (int, error) {
 	return count, nil
 }
 ```
+
+
+## Another alternative
+
+```go
+package main
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"log"
+	"os"
+
+	_ "github.com/lib/pq"
+)
+
+type DBTX interface {
+	Exec(query string, args ...any) (sql.Result, error)
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	Prepare(query string) (*sql.Stmt, error)
+	PrepareContext(ctx context.Context, query string) (*sql.Stmt, error)
+	Query(query string, args ...any) (*sql.Rows, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRow(query string, args ...any) *sql.Row
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+func main() {
+	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
+		os.Getenv("DB_USER"),
+		os.Getenv("DB_PASS"),
+		os.Getenv("DB_HOST"),
+		os.Getenv("DB_PORT"),
+		os.Getenv("DB_NAME"),
+	)
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		log.Fatalf("failed to open db: %v", err)
+	}
+	defer db.Close()
+
+	if err := db.Ping(); err != nil {
+		log.Fatalf("failed to ping db: %v", err)
+	}
+
+	uow := &UoW{db: db}
+	repo := &postgresRepository{uow: uow}
+	uc := &UseCase{repo: repo, uow: uow}
+	n, err := uc.Num(context.Background())
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("1. n is:", n)
+	n, err = uc.NumTx(context.Background())
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("2. n is:", n)
+}
+
+type Repository interface {
+	Num(ctx context.Context) (int, error)
+}
+
+type postgresRepository struct {
+	uow *UoW
+}
+
+func (r *postgresRepository) Num(ctx context.Context) (int, error) {
+	var n int
+	if err := r.uow.DBCtx(ctx).QueryRow(`select 1 + 1`).Scan(&n); err != nil {
+		return 0, err
+	}
+
+	return n, nil
+}
+
+type UseCase struct {
+	uow  *UoW
+	repo Repository
+}
+
+func (uc *UseCase) Num(ctx context.Context) (int, error) {
+	n, err := uc.repo.Num(ctx)
+	return n, err
+}
+
+func (uc *UseCase) NumTx(ctx context.Context) (int, error) {
+	var count int
+	err := uc.uow.RunInTx(ctx, func(ctx context.Context) error {
+		n, err := uc.repo.Num(ctx)
+		if err != nil {
+			return err
+		}
+
+		count = n
+		return nil
+	})
+	return count, err
+}
+
+type UoW struct {
+	db *sql.DB
+	tx *sql.Tx
+}
+
+type uowKey string
+
+var key = uowKey("uow")
+
+func (key uowKey) With(ctx context.Context, uow *UoW) context.Context {
+	return context.WithValue(ctx, key, uow)
+}
+
+func (key uowKey) Value(ctx context.Context) (*UoW, bool) {
+	uow, ok := ctx.Value(key).(*UoW)
+	return uow, ok
+}
+
+func (key uowKey) MustValue(ctx context.Context) *UoW {
+	uow, ok := key.Value(ctx)
+	if !ok {
+		panic("uow: UnitOfWork context not found")
+	}
+
+	return uow
+}
+
+func (u *UoW) DBCtx(ctx context.Context) DBTX {
+	if uow, ok := key.Value(ctx); ok {
+		fmt.Println("uow.isTx", uow.IsTx())
+		return uow.DB()
+	}
+	fmt.Println("uow.isTx", u.IsTx())
+
+	return u.DB()
+}
+
+func (u *UoW) DB() DBTX {
+	if u.IsTx() {
+		return u.tx
+	}
+
+	return u.db
+}
+
+func (u *UoW) IsTx() bool {
+	return u.tx != nil
+}
+
+func (u *UoW) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	if u.IsTx() {
+		return errors.New("uow: cannot nest transaction")
+	}
+
+	tx, err := u.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	ctx = key.With(ctx, &UoW{tx: tx})
+	if err := fn(ctx); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+```
