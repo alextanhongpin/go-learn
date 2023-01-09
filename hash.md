@@ -25,3 +25,36 @@ func main() {
 	fmt.Println(i.String())
 }
 ```
+
+## FNV Hash
+
+Wiki [here](https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function).
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"encoding/hex"
+	"fmt"
+	"hash/fnv"
+)
+
+func main() {
+	cache := make(map[uint32]bool)
+	for i := 0; i < 26; i++ {
+		r := string('a' + rune(i))
+		h := fnv.New32()
+		h.Write([]byte(r))
+		i32 := h.Sum32()
+		hash := hex.EncodeToString(h.Sum(nil))
+		if cache[i32] {
+			fmt.Println("duplicate")
+		}
+		cache[i32] = true
+		fmt.Println(i, r, i32, hash)
+	}
+}
+
+```
