@@ -28,7 +28,7 @@ func main() {
 
 ## FNV Hash
 
-Wiki [here](https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function).
+Wiki [here](https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function). This is used by go's kafka library [here](https://github.com/segmentio/kafka-go/blob/eba9cae7fd57401a8078f6f25bc00cb753cd4f42/balancer.go#L127).
 
 ```go
 // You can edit this code!
