@@ -1103,8 +1103,88 @@ func main() {
 	fmt.Println("shutting down")
 }
 ```
+
+## Leaky-bucket like rate limiter
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"fmt"
+	"math/rand"
+	"sync"
+	"time"
+)
+
+func main() {
+	rl := &RateLimiter{
+		n:      8,
+		period: 5 * time.Second,
+		cache:  make(map[string]RateLimitStat),
+	}
+	now := time.Now()
+	n := 0
+	for i := 0; i < 33; i++ {
+		allow := rl.Allow("1")
+		if allow {
+			n++
+		}
+		fmt.Println(allow, time.Since(now))
+		delay := time.Duration(100 + rand.Intn(100))
+		time.Sleep(delay * time.Millisecond)
+	}
+	fmt.Println("total", n, "requests in", time.Since(now))
+}
+
+type RateLimitStat struct {
+	count int64
+	until time.Time
+}
+
+type RateLimiter struct {
+	n      int64
+	period time.Duration
+	cache  map[string]RateLimitStat
+	mu     sync.Mutex
+}
+
+func (l *RateLimiter) Allow(key string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	state := l.cache[key]
+	if time.Now().Sub(state.until) > 0 {
+		l.cache[key] = RateLimitStat{count: 1, until: time.Now().Add(l.period)}
+		return true
+	}
+
+	rate := l.period.Microseconds() / l.n
+	/*
+		To visualize this, consider having a rate limiter with 5 requests per second.
+		Each dash below represents 200 ms, which is the rate.
+		At time >200ms and <400ms, we want to ensure that there can be max 2 counts of requests made.
+		In short, the rate of requests is smoothen, similar to leaky bucket.
+		
+		     |
+		     V
+		0s - - - - - > 1s
+		   1 2 3 4 5
+	*/
+	left := l.n - state.until.Sub(time.Now()).Microseconds()/rate
+	if state.count < left {
+		state.count++
+		l.cache[key] = state
+		return true
+	}
+
+	return false
+}
+```
 ## References
 
 - https://blog.cloudflare.com/counting-things-a-lot-of-different-things/
 - https://medium.com/@saisandeepmopuri/system-design-rate-limiter-and-data-modelling-9304b0d18250
 - https://hechao.li/2018/06/25/Rate-Limiter-Part1/
+
