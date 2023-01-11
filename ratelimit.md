@@ -1182,6 +1182,90 @@ func (l *RateLimiter) Allow(key string) bool {
 	return false
 }
 ```
+
+## Generate Cell Rate Algorithm (with burst)
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"fmt"
+	"math/rand"
+	"time"
+)
+
+// Reference: https://vikas-kumar.medium.com/rate-limiting-techniques-245c3a5e9cad
+func main() {
+	rl := NewRateLimiter(2, time.Second, 3)
+	var count int
+	start := time.Now()
+	for i := 0; i < 100; i++ {
+		if time.Now().Sub(start) > 1*time.Second {
+			break
+		}
+		allow := rl.Allow("user1")
+		if allow {
+			count++
+		}
+		fmt.Println("allow:", allow, time.Since(start))
+		delay := time.Duration(10+rand.Intn(50)) * time.Millisecond
+		time.Sleep(delay)
+	}
+	fmt.Println("completed", count, "requests in", time.Since(start))
+}
+
+func NewRateLimiter(rate int64, period time.Duration, burst int64) *RateLimiter {
+	return &RateLimiter{
+		period: period,
+		rate:   rate,
+		burst:  burst,
+		cache:  make(map[string]time.Time),
+	}
+}
+
+type RateLimiter struct {
+	period time.Duration
+	rate   int64
+	burst  int64
+	cache  map[string]time.Time
+}
+
+func (r *RateLimiter) emissionInterval() time.Duration {
+	return r.period / time.Duration(r.rate)
+}
+
+func (r *RateLimiter) delayTolerance() time.Duration {
+	return r.emissionInterval() * time.Duration(r.burst)
+}
+
+func (r *RateLimiter) Allow(key string) bool {
+	tat := r.cache[key]
+	arrival := time.Now()
+
+	// Golang time operators
+	// lt: t0.Before(t1)
+	// lte: !t0.After(t1)
+	// gt: t0.After(t1)
+	// gte: !t0.Before(t1)
+
+	// tat < arrival
+	if tat.Before(arrival) {
+		tat = arrival
+	}
+	allowAt := tat.Add(-r.delayTolerance())
+
+	// arrival >= allowAt
+	if !arrival.Before(allowAt) {
+		tat = tat.Add(r.emissionInterval())
+		r.cache[key] = tat
+		return true
+	}
+	return false
+}
+```
+
 ## References
 
 - https://blog.cloudflare.com/counting-things-a-lot-of-different-things/
