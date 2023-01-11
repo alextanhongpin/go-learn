@@ -1266,6 +1266,117 @@ func (r *RateLimiter) Allow(key string) bool {
 }
 ```
 
+## Token Bucket 
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"fmt"
+	"math/rand"
+	"sync"
+	"time"
+)
+
+var Unix = time.Unix(1257894000, 0)
+
+// Reference: https://vikas-kumar.medium.com/rate-limiting-techniques-245c3a5e9cad
+func main() {
+	rl := NewThreadSafeRateLimiter(NewTokenBucketRateLimiter(1, 200*time.Millisecond, 5))
+	var count int
+	start := time.Now()
+	for i := 0; i < 100; i++ {
+		if time.Now().Sub(start) > 2*time.Second {
+			break
+		}
+		allow := rl.Allow("user1", 1)
+		if allow {
+			count++
+		}
+		fmt.Println("allow:", allow, time.Since(start))
+		delay := time.Duration(10+rand.Intn(50)) * time.Millisecond
+		time.Sleep(delay)
+	}
+	fmt.Println("completed", count, "requests in", time.Since(start))
+}
+
+type RateLimiter interface {
+	Allow(key string, quota int64) bool
+}
+
+type ThreadSafeRateLimiter struct {
+	rl RateLimiter
+	mu sync.Mutex
+}
+
+func NewThreadSafeRateLimiter(rl RateLimiter) *ThreadSafeRateLimiter {
+	return &ThreadSafeRateLimiter{rl: rl}
+}
+
+func (rl *ThreadSafeRateLimiter) Allow(key string, quota int64) bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	return rl.rl.Allow(key, quota)
+}
+
+type TokenBucketItem struct {
+	// The last time the request was made.
+	last time.Time
+
+	// Number of available tokens.
+	tokens int64
+}
+
+func NewTokenBucketRateLimiter(rate int64, period time.Duration, size int64) *TokenBucketRateLimiter {
+	return &TokenBucketRateLimiter{
+		period: period,
+		rate:   rate,
+		size:   size,
+		cache:  make(map[string]TokenBucketItem),
+	}
+}
+
+type TokenBucketRateLimiter struct {
+	period time.Duration
+	rate   int64
+	size   int64
+	cache  map[string]TokenBucketItem
+}
+
+func (r *TokenBucketRateLimiter) Allow(key string, quota int64) bool {
+	if quota == 0 {
+		panic("must be at least 1")
+	}
+
+	now := time.Now()
+	item, ok := r.cache[key]
+	if !ok {
+		item.last = time.Now()
+		r.cache[key] = item
+		return true
+	}
+
+	// Find the refill window.
+	newTokens := now.Sub(item.last).Nanoseconds() / r.period.Nanoseconds()
+	item.tokens += newTokens
+	if item.tokens > r.size {
+		item.tokens = r.size
+	}
+	if item.tokens >= quota {
+		item.tokens -= quota
+		item.last = now
+		r.cache[key] = item
+		return true
+	}
+
+	return false
+}
+
+// TODO: Add clear mechanism
+```
+
 ## References
 
 - https://blog.cloudflare.com/counting-things-a-lot-of-different-things/
