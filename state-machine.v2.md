@@ -1,3 +1,15 @@
+# State Machine
+
+We want to represent state machines using struct. The state for the light is quasi:
+
+```typescript
+type LightState = LightOn | LightOff
+```
+
+The light can be either `on` or `off`, it cannot be in both state at the same time.
+
+If the light is `on`, it can only be `off`, or left `on` and vice-versa. A better design is to use separate structs to represent the state, rather than having a struct with both methods `on` and `off`, and checking if the method is allowed to be called.
+
 ```go
 // You can edit this code!
 // Click here and start typing.
