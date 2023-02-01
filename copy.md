@@ -30,3 +30,31 @@ func main() {
 	fmt.Println(templates[0], cptemplates[0])
 }
 ```
+
+## Avoiding copy of struct
+
+See [here](https://github.com/golang/go/issues/8005#issuecomment-190753527).
+
+```go
+type hello struct {
+	noCopy noCopy
+}
+type noCopy struct{}
+
+func (*noCopy) Lock()   {}
+func (*noCopy) Unlock() {}
+
+func greet(h hello) {
+	fmt.Println(h)
+}
+
+func greet2(h *hello) {
+	fmt.Println(h)
+}
+
+func main() {
+	h := hello{}
+	greet(h) // Error
+	greet2(&h) // Valid
+}
+```
