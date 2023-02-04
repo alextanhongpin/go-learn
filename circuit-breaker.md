@@ -748,3 +748,152 @@ However, if there are concurrent failures, the version can only be updated incre
 Event sourcing. Everytime there is a state change, append to a list of states. Take the majority of the last n states (or last n states based on the circuit breaker timeout) to decide the current state. Prefer to be pessimistic over optimistic, so take the worst possible states first.
 
 If one of the state is opened, then all of them are opened, and can only make new request after the given time. Once they are half-opened, we can perhaps average the number of times the state appeared as the success threshold...
+
+
+
+## Simpler Circuit Breaker
+
+```go
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+)
+
+func main() {
+	m := &mockCb{
+		cb: &CircuitBreaker{
+			success: 3,
+			failure: 3,
+			timeout: 1 * time.Second,
+			now:     time.Now,
+		},
+	}
+	ctx := context.Background()
+	fmt.Println(m.Handle(ctx), m.cb.State())
+
+	m.ok = false
+	fmt.Println(m.Handle(ctx), m.cb.State(), "1 bad")
+	fmt.Println(m.Handle(ctx), m.cb.State(), "2 bad")
+	fmt.Println(m.Handle(ctx), m.cb.State(), "3 bad")
+	fmt.Println(m.Handle(ctx), m.cb.State(), "4 bad")
+
+	fmt.Println("sleep")
+
+	time.Sleep(2 * time.Second)
+	m.ok = true
+	fmt.Println(m.Handle(ctx), m.cb.State(), "1 ok")
+	fmt.Println(m.Handle(ctx), m.cb.State(), "2 ok")
+	fmt.Println(m.Handle(ctx), m.cb.State(), "3 ok")
+	fmt.Println(m.Handle(ctx), m.cb.State(), "4 ok")
+	fmt.Println("done")
+}
+
+var ErrUnavailable = errors.New("circuit: unavailable")
+
+type State int
+
+const (
+	StateClosed State = iota
+	StateOpen
+	StateHalfOpen
+)
+
+func (s State) String() string {
+	switch s {
+	case StateClosed:
+		return "closed"
+	case StateOpen:
+		return "open"
+	case StateHalfOpen:
+		return "half-open"
+	default:
+		return ""
+	}
+}
+
+type CircuitBreaker struct {
+	state    State
+	success  int
+	failure  int
+	counter  int
+	timeout  time.Duration
+	deadline time.Time
+	now      func() time.Time
+}
+
+func (c *CircuitBreaker) State() State {
+	return c.state
+}
+
+func (c *CircuitBreaker) IsOpen() bool {
+	return c.state == StateOpen
+}
+
+func (c *CircuitBreaker) IsClosed() bool {
+	return c.state == StateClosed
+}
+
+func (c *CircuitBreaker) IsHalfOpen() bool {
+	return c.state == StateHalfOpen
+}
+
+func (c *CircuitBreaker) Allow() bool {
+	if c.IsOpen() {
+		c.Update(true)
+	}
+
+	return !c.IsOpen()
+}
+
+func (c *CircuitBreaker) Update(ok bool) {
+	switch c.state {
+	case StateOpen:
+		if c.now().After(c.deadline) {
+			c.counter = 0
+			c.state = StateHalfOpen
+		}
+	case StateHalfOpen:
+		if !ok {
+			c.counter = 0
+			c.state = StateOpen
+
+			return
+		}
+
+		c.counter++
+		if c.counter > c.success {
+			c.counter = 0
+			c.state = StateClosed
+		}
+	case StateClosed:
+		if ok {
+			return
+		}
+
+		c.counter++
+		if c.counter > c.failure {
+			c.deadline = c.now().Add(c.timeout)
+			c.state = StateOpen
+		}
+	}
+}
+
+type mockCb struct {
+	cb *CircuitBreaker
+	ok bool
+}
+
+func (m *mockCb) Handle(ctx context.Context) error {
+	if !m.cb.Allow() {
+		return ErrUnavailable
+	}
+
+	m.cb.Update(m.ok)
+
+	return nil
+}
+```
