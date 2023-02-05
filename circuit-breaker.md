@@ -749,6 +749,9 @@ Event sourcing. Everytime there is a state change, append to a list of states. T
 
 If one of the state is opened, then all of them are opened, and can only make new request after the given time. Once they are half-opened, we can perhaps average the number of times the state appeared as the success threshold...
 
+### Idea 3
+
+Ignore global distributed state, just handle it locally. Then buffer the updates (see below).
 
 
 ## Simpler Circuit Breaker
@@ -896,4 +899,37 @@ func (m *mockCb) Handle(ctx context.Context) error {
 
 	return nil
 }
+```
+
+## Buffering updates
+
+```diff
+type CircuitBreaker struct {
+	state     State
+	success   int
+	failure   int
+	counter   int
+	timeout   time.Duration
+	deadline  time.Time
+	now       func() time.Time
++	sometimes rate.Sometimes
+}
+
++ func (c *CircuitBreaker) Update(ok bool) { 
++	c.sometimes.Do(func() {
++ 		c.update(ok)
++ 	})
++ }
+```
+
+We can then initialize it to update for example every 16ms:
+```go
+cb := &CircuitBreaker{
+	success: 3,
+	failure: 3,
+	timeout: 1 * time.Second,
+	now:     time.Now,
+	sometimes: rate.Sometimes{
+		Interval: 16 * time.Millisecond,
+	}
 ```
