@@ -23,14 +23,6 @@ type Nested struct {
 	Foo Foo
 }
 
-func (n *Nested) Validate() error {
-	if n == nil {
-		return errors.New("nested required")
-	}
-
-	return n.Foo.Validate()
-}
-
 type Foo string
 
 func (f *Foo) Validate() error {
@@ -60,6 +52,8 @@ func (b *Bar) Validate() error {
 }
 
 func main() {
+	var nilbar *Bar
+	fmt.Println(Validate(nilbar))
 	var r Request
 	fmt.Println(Validate(r))
 
@@ -99,6 +93,10 @@ func Validate(r any) error {
 }
 
 func validate(prefix string, v reflect.Value, omitempty bool) error {
+	if !v.IsValid() {
+		return nil
+	}
+
 	switch v.Kind() {
 	case reflect.Struct:
 		t := v.Type()
@@ -120,6 +118,20 @@ func validate(prefix string, v reflect.Value, omitempty bool) error {
 			}
 
 			switch vi.Kind() {
+			case reflect.Pointer:
+				// If the struct field has a Validate method, call it.
+				if err := validate(name, vi, omitempty); err != nil {
+					return err
+				}
+
+				// If the underlying struct field is a pointer of a struct,
+				// then validate each fields.
+				switch vi.Elem().Kind() {
+				case reflect.Struct:
+					if err := validate(name, vi.Elem(), omitempty); err != nil {
+						return err
+					}
+				}
 			case reflect.Struct, reflect.Slice, reflect.Array:
 				if err := validate(name, vi, omitempty); err != nil {
 					return err
