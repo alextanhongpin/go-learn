@@ -42,7 +42,12 @@ func countLeadingSpace(s string) int {
 func format(v any) string {
 	s := fmt.Sprintf("%#v", v)
 	var res []string
+	push := func(s string) {
+		res = append(res, strings.TrimSuffix(s, " "))
+	}
+
 	sb := new(strings.Builder)
+
 	for i, r := range s {
 		h := i - 1
 		j := i + 1
@@ -60,7 +65,7 @@ func format(v any) string {
 
 		if r == '{' && s[j] != '}' { // Skip if map[string]interface{}
 			sb.WriteRune(r)
-			res = append(res, sb.String())
+			push(sb.String())
 			sb.Reset()
 
 			var n int
@@ -71,7 +76,7 @@ func format(v any) string {
 			n += 2
 			sb.WriteString(strings.Repeat(" ", n))
 		} else if r == '}' && s[h] != '{' {
-			res = append(res, sb.String())
+			push(sb.String())
 			sb.Reset()
 
 			var n int
@@ -85,7 +90,7 @@ func format(v any) string {
 		} else if r == ',' && s[j] == ' ' {
 			// New line.
 			sb.WriteRune(r)
-			res = append(res, sb.String())
+			push(sb.String())
 			sb.Reset()
 
 			var n int
@@ -102,7 +107,7 @@ func format(v any) string {
 			sb.WriteRune(r)
 		}
 	}
-	res = append(res, sb.String())
+	push(sb.String())
 	return strings.Join(res, "\n")
 }
 ```
