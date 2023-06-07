@@ -69,3 +69,16 @@ func Bar(ctx context.Context, msg string) {
 	step(ctx, "exec bar", msg)
 }
 ```
+
+
+Output:
+
+```
+step 1: exec foo
+(main.FooDto) {
+ msg: (string) (len=3) "foo"
+}
+---
+step 2: exec bar
+(string) (len=3) "foo"
+```
