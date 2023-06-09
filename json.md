@@ -105,3 +105,33 @@ func mustDelim(dec *json.Decoder, delim json.Delim) {
 	}
 }
 ```
+
+
+## Extracting and validating if a json string is valid
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+)
+
+var text = `hello
+
+{
+	"name": "john"
+}
+`
+
+func main() {
+	a := strings.Index(text, "{")
+	b := strings.LastIndex(text, "}")
+	res := text[a : b+1]
+	fmt.Println(res)
+	fmt.Println(json.Valid([]byte(res)))
+}
+```
