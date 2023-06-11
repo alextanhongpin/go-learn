@@ -10,13 +10,20 @@ package main
 import "fmt"
 
 func main() {
-	uc := &UserUsecase{}
-	uc.steps = uc
+	// Actually why do this? Just pass a repo and implement all the steps.
+	uc := NewUserUsecase(nil)
 	uc.Do()
 
-	uc.steps = &mockSteps{}
+	uc = NewUserUsecase(&mockSteps{})
 	uc.Do()
-	fmt.Println("Hello, 世界")
+}
+
+func NewUserUsecase(steps steps) *UserUsecase {
+	uc := &UserUsecase{steps: steps}
+	if steps == nil {
+		uc.steps = uc
+	}
+	return uc
 }
 
 type mockSteps struct{}
@@ -25,10 +32,11 @@ func (m *mockSteps) Process() {
 	fmt.Println("mocked")
 }
 
+type steps interface {
+	Process()
+}
 type UserUsecase struct {
-	steps interface {
-		Process()
-	}
+	steps
 }
 
 func (uc *UserUsecase) Do() {
@@ -39,4 +47,5 @@ func (uc *UserUsecase) Do() {
 func (uc *UserUsecase) Process() {
 	fmt.Println("process")
 }
+
 ```
