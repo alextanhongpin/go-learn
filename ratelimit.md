@@ -1377,6 +1377,79 @@ func (r *TokenBucketRateLimiter) Allow(key string, quota int64) bool {
 // TODO: Add clear mechanism
 ```
 
+## Leaky bucket
+
+```go
+package ratelimit
+
+import (
+	"sync"
+	"time"
+)
+
+type LeakyBucket struct {
+	mu       sync.Mutex
+	limit    int64
+	period   time.Duration
+	interval int64
+	calledAt int64
+
+	Now func() time.Time
+}
+
+func NewLeakyBucket(limit int64, period time.Duration) *LeakyBucket {
+	return &LeakyBucket{
+		limit:    limit,
+		period:   period,
+		interval: period.Nanoseconds() / limit,
+		Now:      time.Now,
+	}
+}
+
+func (r *LeakyBucket) Allow() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	t := r.Now().UnixNano()
+	calledAt := t - (t % r.interval)
+	if r.calledAt == calledAt {
+		return false
+	}
+
+	r.calledAt = calledAt
+	return true
+}
+```
+Leaky bucket is used to control the rate of work. We can simplify it in golang:
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"context"
+	"fmt"
+	"time"
+)
+
+func main() {
+	t := time.NewTicker(time.Second / time.Duration(10))
+	defer t.Stop()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	for {
+		select {
+		case <-ctx.Done():
+			fmt.Println("program terminating")
+			return
+		case <-t.C:
+			fmt.Println("tick...")
+		}
+	}
+}
+```
+
 ## References
 
 - https://blog.cloudflare.com/counting-things-a-lot-of-different-things/
