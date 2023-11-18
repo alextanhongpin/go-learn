@@ -1,3 +1,4 @@
+## With Jennifer
 ```go
 package main
 
@@ -91,5 +92,22 @@ func main() {
 		)),
 	)
 	fmt.Printf("%#v", f)
+}
+```
+
+## Using environment variable 
+
+
+```go
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	// $ world=$(cat Makefile) go run test.go
+	fmt.Println(os.ExpandEnv("hello $world"))
 }
 ```
