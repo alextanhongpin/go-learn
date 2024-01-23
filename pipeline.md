@@ -147,3 +147,74 @@ func (p *Pipeline) Exec() error {
 }
 
 ```
+
+## Generics
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"context"
+	"fmt"
+)
+
+func main() {
+	uc := NewCreateAccount()
+	fmt.Println(uc.Do(context.Background()))
+	fmt.Println("Hello, 世界")
+}
+
+type CreateAccountState struct {
+	Events []string
+}
+
+type CreateAccount struct {
+}
+
+func NewCreateAccount() *CreateAccount {
+	return &CreateAccount{}
+}
+
+func (c *CreateAccount) Do(ctx context.Context) (*CreateAccountState, error) {
+	req := new(CreateAccountState)
+	p := &Pipeline[*CreateAccountState]{
+		Steps: []PipelineFunc[*CreateAccountState]{
+			c.Validate,
+			c.Create,
+			c.Notify,
+		},
+	}
+	return req, p.Exec(ctx, req)
+}
+
+func (c *CreateAccount) Validate(ctx context.Context, req *CreateAccountState) error {
+	req.Events = append(req.Events, "validate")
+	return nil
+}
+
+func (c *CreateAccount) Create(ctx context.Context, req *CreateAccountState) error {
+	req.Events = append(req.Events, "create")
+	return nil
+}
+func (c *CreateAccount) Notify(ctx context.Context, req *CreateAccountState) error {
+	req.Events = append(req.Events, "notify")
+	return nil
+}
+
+type PipelineFunc[T any] func(ctx context.Context, t T) error
+
+type Pipeline[T any] struct {
+	Steps []PipelineFunc[T]
+}
+
+func (p *Pipeline[T]) Exec(ctx context.Context, t T) error {
+	for _, step := range p.Steps {
+		if err := step(ctx, t); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+```
