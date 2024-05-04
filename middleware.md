@@ -71,3 +71,58 @@ func Chain[T any](handler Handler[T], handlers ...Adapter[T]) Handler[T] {
 	return head
 }
 ```
+
+## HTTP Middleware
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+)
+
+func main() {
+	ts := httptest.NewServer(Guard("two", Guard("one", http.HandlerFunc(do))))
+	defer ts.Close()
+
+	resp, err := ts.Client().Get(ts.URL)
+	if err != nil {
+		panic(err)
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(string(b))
+
+	fmt.Println("Hello, 世界")
+}
+
+func do(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprint(w, "do")
+}
+
+func Guard(msg string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("before", msg)
+		next.ServeHTTP(w, r)
+		fmt.Println("after")
+	})
+}
+```
+
+Output:
+```
+before two
+before one
+after
+after
+do
+Hello, 世界
+```
