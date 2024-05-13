@@ -36,3 +36,28 @@ func main() {
 	}
 }
 ```
+
+## Simplest rate limit
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func main() {
+	p := time.Second
+	d := 50 * time.Millisecond
+	l := 5.0
+	c := 0.0
+	for _ = range 10 {
+		c = ((p-min(d, p)).Seconds()/p.Seconds())*c + 1
+		fmt.Println(c)
+	}
+	fmt.Println("Hello, 世界", c, c < l)
+}
+```
