@@ -108,3 +108,73 @@ func main() {
 	fmt.Println(c.Stmt())
 }
 ```
+
+## Generic Pagination
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"fmt"
+	"net/url"
+)
+
+func main() {
+	p := &paginator[any]{
+		URL:   "/hello",
+		Limit: 20,
+	}
+	as := make([]any, 21)
+	fmt.Println(len(p.Paginate(as)))
+	fmt.Println(p.HasNext(as))
+
+	v := url.Values{}
+	v.Set("name", "john")
+	v.Set("age", "10")
+	fmt.Println(p.BuildURL(v))
+	fmt.Println("Hello, 世界")
+
+}
+
+var _ Paginator[any] = new(paginator[any])
+
+type Paginator[T any] interface {
+	Paginate(v []T) []T
+	HasNext(v []T) bool
+	BuildURL(v url.Values) string
+}
+
+type paginator[T any] struct {
+	URL   string
+	Limit int
+}
+
+func (p *paginator[T]) Paginate(v []T) []T {
+	if len(v) > p.Limit {
+		return v[:p.Limit]
+	}
+
+	return v
+}
+
+func (p *paginator[T]) HasNext(v []T) bool {
+	return len(v) > p.Limit
+}
+
+func (p *paginator[T]) BuildURL(v url.Values) string {
+	u, err := url.Parse(p.URL)
+	if err != nil {
+		panic(err)
+	}
+	u.RawQuery = v.Encode()
+	return u.String()
+}
+
+```
+
+
+## HashID
+
+If all params for cursor is int, use hash id, or now known as [sqids](https://github.com/sqids/sqids-go)
