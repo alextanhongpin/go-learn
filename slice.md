@@ -170,3 +170,36 @@ func main() {
 	}
 }
 ```
+
+## Diff
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import "fmt"
+
+func main() {
+	a := []int{1, 2, 3}
+	b := []int{2, 3, 4}
+	removed := diff(b, a)
+	added := diff(a, b)
+	fmt.Println(removed, added)
+	fmt.Println("Hello, 世界")
+}
+
+func diff[T ~[]V, V comparable](a, b T) T {
+	m := make(map[V]bool)
+	for _, v := range a {
+		m[v] = true
+	}
+	var res T
+	for _, v := range b {
+		if !m[v] {
+			res = append(res, v)
+		}
+	}
+	return res
+}
+```
