@@ -218,3 +218,80 @@ func (p *Pipeline[T]) Exec(ctx context.Context, t T) error {
 	return nil
 }
 ```
+
+## Pipeline using template 
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"text/template"
+)
+
+type User struct {
+	Name string
+}
+
+type Payment struct {
+	ID string
+}
+
+type Booking struct {
+	ID string
+}
+
+func main() {
+	// Used for prompting
+	b, err := exec(`{{- define "prompt" -}} hi, {{ . }} {{- end -}}
+{{- define "system" -}} this is a system message: {{ . }} {{- end -}}
+{{- define "user" -}} this is a user message: {{ . }} {{- end -}}
+{{- template "system" .System }}
+{{ template "user" .User }}
+{{ template "prompt" .Prompt -}}
+	`, nil, map[string]any{
+		"System": "SYSTEM",
+		"User":   "USER",
+		"Prompt": "PROMPT",
+	})
+	fmt.Println(string(b), err)
+
+	// Used for chaining steps
+	b, err = exec(`{{ . | find_user | make_payment | complete_booking | to_json }}`, template.FuncMap{
+		"find_user": func(id string) (*User, error) {
+			if id == "" {
+				return nil, errors.New("user not found")
+			}
+			return &User{Name: "John"}, nil
+		},
+		"make_payment": func(u *User) (*Payment, error) {
+			return &Payment{ID: "123"}, nil
+		},
+		"complete_booking": func(p *Payment) (*Booking, error) {
+			return &Booking{ID: "booked-" + p.ID}, nil
+		},
+		"to_json": func(a any) (string, error) {
+			b, err := json.Marshal(a)
+			if err != nil {
+				return "", err
+			}
+			return string(b), nil
+		},
+	}, "123")
+	fmt.Println(string(b), err)
+}
+
+func exec(expr string, funcs template.FuncMap, payload any) ([]byte, error) {
+	t := template.Must(template.New("").Funcs(funcs).Parse(expr))
+	var b bytes.Buffer
+	if err := t.Execute(&b, payload); err != nil {
+		return nil, err
+	}
+	return b.Bytes(), nil
+}
+```
