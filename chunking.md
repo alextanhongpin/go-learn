@@ -46,3 +46,36 @@ func main() {
 }
 
 ```
+
+Character chunk
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"fmt"
+)
+
+func main() {
+	text := `this is a super long text that you cannot imagine also this is another thing that you cannot comprehend haha paper scissors rock`
+	tokens := []rune(text)
+	chunk_size := 26
+	chunk_overlap := 5
+	batch := 0
+
+	i := 0
+	m := make(map[int]string)
+
+	for i < len(tokens) {
+		start := i
+		end := min(start+chunk_size, len(tokens))
+		fmt.Println("start", start, "end", end)
+		m[batch] = string(tokens[start:end])
+		i += chunk_size - chunk_overlap
+		batch += 1
+	}
+	fmt.Println("Hello, 世界", m)
+}
+```
