@@ -1,3 +1,7 @@
+There is an issue with this implementation where it will fail if the tokens length is greater than the `chunk_size`. It will get caught in an infinite loop.
+
+We will address it by limiting the number of characters per token.
+
 ```go
 // You can edit this code!
 // Click here and start typing.
