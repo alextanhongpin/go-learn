@@ -37,3 +37,53 @@ func generateUniqueRandomNumber(lo, hi int, k int) []int {
 	return res[:k]
 }
 ```
+
+## Random of length n
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"fmt"
+	"math/rand"
+	"slices"
+)
+
+func main() {
+	fmt.Println(arange(0, 10))
+	fmt.Println(arange(5, 10))
+	fmt.Println(random(5, 0, 5))
+	fmt.Println("Hello, 世界")
+}
+
+func random(n int, lo, hi int) []int {
+	d := hi - lo
+	switch {
+	case d < n:
+		return nil
+	case d == n:
+		return arange(lo, hi)
+	default:
+		m := make(map[int]bool)
+		for len(m) != n {
+			m[rand.Intn(hi-lo)+lo] = true
+		}
+		res := make([]int, 0, n)
+		for k := range m {
+			res = append(res, k)
+		}
+		slices.Sort(res)
+		return res
+	}
+}
+
+func arange(lo, hi int) []int {
+	res := make([]int, hi-lo)
+	for i := 0; i < hi-lo; i++ {
+		res[i] = i + lo
+	}
+	return res
+}
+```
