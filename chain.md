@@ -211,3 +211,54 @@ func (a *a) Do(fn func() error) error {
 	return fn()
 }
 ```
+
+Using for loop:
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import "fmt"
+
+func main() {
+	foo := &a{"foo"}
+	bar := &a{"bar"}
+	baz := &a{"baz"}
+	err := chain(func() error {
+		fmt.Println("what")
+		return nil
+	}, foo, bar, baz)
+	fmt.Println("Hello, 世界", err)
+}
+
+type doer interface {
+	Do(fn func() error) error
+}
+
+func chain(fn func() error, doers ...doer) error {
+	var c = doers[0].Do
+	for i := range len(doers) {
+		// Reverse it.
+		last := doers[len(doers)-i-1]
+		
+		// Closure.
+		d := c
+		c = func(fn func() error) error {
+			return last.Do(func() error {
+				return d(fn)
+			})
+		}
+	}
+	return c(fn)
+}
+
+type a struct {
+	msg string
+}
+
+func (a *a) Do(fn func() error) error {
+	fmt.Println(a.msg)
+	return fn()
+}
+```
