@@ -167,3 +167,47 @@ func (p Processor) Map(fn func(*Processor) error) Processor {
 	return cp
 }
 ```
+
+
+## Interface chaining
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import "fmt"
+
+func main() {
+	foo := &a{"foo"}
+	bar := &a{"bar"}
+	err := chain(func() error {
+		fmt.Println("what")
+		return nil
+	}, foo, bar)
+	fmt.Println("Hello, 世界", err)
+}
+
+type doer interface {
+	Do(fn func() error) error
+}
+
+func chain(fn func() error, doers ...doer) error {
+	if len(doers) == 0 {
+		return fn()
+	}
+	last := len(doers) - 1
+	return chain(func() error {
+		return doers[last].Do(fn)
+	}, doers[:last]...)
+}
+
+type a struct {
+	msg string
+}
+
+func (a *a) Do(fn func() error) error {
+	fmt.Println(a.msg)
+	return fn()
+}
+```
