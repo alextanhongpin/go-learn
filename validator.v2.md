@@ -311,3 +311,221 @@ func NewFloat64Parser() ParserMap[float64] {
 }
 
 ```
+
+### Validator
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"errors"
+	"fmt"
+	"reflect"
+	"strconv"
+	"strings"
+
+	"golang.org/x/exp/constraints"
+)
+
+type Num int
+type Str string
+
+func main() {
+	s := "hello world"
+	fmt.Println(Validate(s, Required, MinLength(10)))
+	fmt.Println(Validate(s, Required, MinLength(100)))
+	fmt.Println(Validate(s, StringExpr("required,min=100")...))
+
+	// Unable to handle type definition.
+	str := Str("hello world")
+	fmt.Println(Validate(string(str), Required, MinLength(10)))
+	fmt.Println(Validate(string(str), Required, MinLength(100)))
+
+	num := 10.4
+	fmt.Println(Validate(num, Required, Min(10.0)))
+	fmt.Println(Validate(num, Required, Min(100.0)))
+
+	arr := []Num{1, 2, 3}
+	fmt.Println(Validate(arr, Required, MinItem[Num](3), Each[Num](Min(Num(10)), Max(Num(100)))))
+	fmt.Println(Validate(arr, Required, MinItem[Num](3), Each[Num](Max(Num(2)))))
+
+	var ns *string
+	ns = &s
+	fmt.Println(errors.Join(
+		Validate(ns, Required),
+		Validate(Value(ns), MinLength(100)),
+	))
+}
+
+func Value[T any](v *T) T {
+	if v == nil {
+		var t T
+		return t
+	}
+	return *v
+}
+
+func StringExpr(expr string) []func(string) error {
+	var res []func(string) error
+	for _, e := range strings.Split(expr, ",") {
+		k, v, _ := strings.Cut(e, "=")
+		switch k {
+		case "required":
+			res = append(res, Required[string])
+		case "optional":
+			res = append(res, Optional[string])
+		case "min":
+			res = append(res, MinLength(toInt(v)))
+		case "max":
+			res = append(res, MaxLength(toInt(v)))
+		default:
+			panic(fmt.Sprintf("unknown expr %q", e))
+		}
+	}
+	return res
+}
+func toInt(s string) int {
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		panic(err)
+	}
+	return n
+}
+
+var ErrSkip = errors.New("skip")
+
+func Validate[T any](v T, fns ...func(T) error) error {
+	for _, fn := range fns {
+		if err := fn(v); err != nil {
+			if errors.Is(err, ErrSkip) {
+				return nil
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+func Required[T any](v T) error {
+	if reflect.ValueOf(v).IsZero() {
+		return errors.New("required")
+	}
+	return nil
+}
+
+func Optional[T any](v T) error {
+	if reflect.ValueOf(v).IsZero() {
+		return ErrSkip
+	}
+	return nil
+}
+
+func MinLength(n int) func(string) error {
+	return func(s string) error {
+		if len([]rune(s)) < n {
+			return fmt.Errorf("min length of %d", n)
+		}
+		return nil
+	}
+}
+
+func MaxLength(n int) func(string) error {
+	return func(s string) error {
+		if len([]rune(s)) > n {
+			return fmt.Errorf("max length of %d", n)
+		}
+		return nil
+	}
+}
+
+func Item[S ~[]E, E any](n int) func(S) error {
+	return func(s S) error {
+		if len(s) != n {
+			return fmt.Errorf("must have %d item(s)", n)
+		}
+		return nil
+	}
+}
+
+func MinItem[T any](n int) func([]T) error {
+	return func(s []T) error {
+		if len(s) < n {
+			return fmt.Errorf("min %d item(s)", n)
+		}
+		return nil
+	}
+}
+
+func MaxItem[T any](n int) func([]T) error {
+	return func(s []T) error {
+		if len(s) > n {
+			return fmt.Errorf("max %d item(s)", n)
+		}
+		return nil
+	}
+}
+
+func Length(n int) func(string) error {
+	return func(s string) error {
+		if len([]rune(s)) == n {
+			return fmt.Errorf("length must be %d", n)
+		}
+		return nil
+	}
+}
+
+func Equal[T comparable](v T) func(T) error {
+	return func(vv T) error {
+		if vv != v {
+			return fmt.Errorf("not equal %v", v)
+		}
+		return nil
+	}
+}
+
+type Number interface {
+	constraints.Integer | constraints.Float
+}
+
+func Min[T Number](n T) func(T) error {
+	return func(v T) error {
+		if v < n {
+			return fmt.Errorf("min %v", n)
+		}
+		return nil
+	}
+}
+
+func Max[T Number](n T) func(T) error {
+	return func(v T) error {
+		if v > n {
+			return fmt.Errorf("min %v", n)
+		}
+		return nil
+	}
+}
+
+func Between[T Number](lo, hi T) func(T) error {
+	return func(v T) error {
+		if v < lo || v > hi {
+			return fmt.Errorf("must be between %v and %v", lo, hi)
+		}
+		return nil
+	}
+}
+
+func Each[T any](fns ...func(T) error) func([]T) error {
+	return func(vs []T) error {
+		for _, v := range vs {
+			for _, fn := range fns {
+				if err := fn(v); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+}
+```
