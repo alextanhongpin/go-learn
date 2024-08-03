@@ -76,7 +76,7 @@ import (
 
 func main() {
 	rl := &gcra{
-		burst:  1,
+		burst:  2,
 		limit:  5,
 		period: time.Second,
 	}
@@ -88,16 +88,17 @@ func main() {
 	fmt.Println()
 	for i := range 10 {
 		fmt.Println(i, rl.Allow())
+		time.Sleep(100 * time.Millisecond)
 	}
 	fmt.Println("Hello, 世界")
 }
 
 type gcra struct {
 	// State.
-	ts    time.Time
-	burst int
+	ts time.Time
 
 	// Option.
+	burst  int
 	period time.Duration
 	limit  int
 }
@@ -132,20 +133,14 @@ func (g *gcra) Allow() *result {
 
 	resetAt := now.Truncate(g.period).Add(g.period)
 	remaining := int(math.Floor(float64(resetAt.Sub(now)) / float64(interval)))
-	if gte(g.ts, now) {
-		return &result{
-			allow:     false,
-			limit:     g.limit + g.burst,
-			remaining: remaining,
-			resetAt:   resetAt,
-			retryAt:   g.ts,
-		}
+	allow := false
+	if lte(g.ts.Add(interval*time.Duration(1)), now) {
+		allow = true
+		g.ts = g.ts.Add(interval * time.Duration(1))
 	}
 
-	g.ts = g.ts.Add(interval)
-
 	return &result{
-		allow:     true,
+		allow:     allow,
 		limit:     g.limit + g.burst,
 		remaining: remaining,
 		resetAt:   resetAt,
@@ -155,6 +150,10 @@ func (g *gcra) Allow() *result {
 
 func gte(a, b time.Time) bool {
 	return !a.Before(b)
+}
+
+func lte(a, b time.Time) bool {
+	return !a.After(b)
 }
 ```
 
