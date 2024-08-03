@@ -157,3 +157,11 @@ func gte(a, b time.Time) bool {
 	return !a.Before(b)
 }
 ```
+
+
+For more performance, specifically setting value in redis, we can always increment the value but cap it:
+
+```
+val = set key min(upper_ts, current_ts+interval)
+// Do sth with value
+```
