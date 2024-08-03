@@ -17,9 +17,6 @@ func main() {
 	for i := range 10 {
 		fmt.Println(i, rl.Allow())
 		time.Sleep(100 * time.Millisecond)
-		if i == 8 {
-			time.Sleep(200 * time.Millisecond)
-		}
 	}
 	time.Sleep(1 * time.Second)
 	for i := range 10 {
@@ -47,7 +44,7 @@ func (g *gcra) Allow() bool {
 		g.ts = time.Now().Add(-burst)
 	}
 
-	upper := time.Now().Truncate(g.period).Add(g.period)
+	upper := time.Now()
 	if gte(g.ts, upper) {
 		return false
 	}
