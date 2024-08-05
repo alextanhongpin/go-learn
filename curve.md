@@ -33,5 +33,42 @@ func exponentialGrowthAndDecay(x float64) float64 {
 	// ln = 2.303 * log
 	return 2.303 * math.Log(x+1) * math.Exp(-0.01*x*x)
 }
+```
 
+
+Example of customizing
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"fmt"
+	"math"
+	"math/rand"
+	"time"
+)
+
+func main() {
+	var total time.Duration
+	for i := 0; i < 100; i += 2 {
+		a := exponentialGrowthAndDecay(float64(i))
+		b := exponentialGrowthAndDecay(float64(i+1)) * rand.Float64()
+		d := time.Duration(50*(a+b)) * time.Millisecond
+		fmt.Println(d)
+		total += d
+		if i != 0 && d <= 50*time.Millisecond {
+			fmt.Println(i)
+			break
+		}
+	}
+	fmt.Println("Hello, 世界", total)
+}
+
+func exponentialGrowthAndDecay(x float64) float64 {
+	// ln(x+1) * exp(-0.01x^2)
+	// ln = 2.303 * log
+	return 2.303 * math.Log(x+1) * math.Exp(-0.005*x*x)
+}
 ```
