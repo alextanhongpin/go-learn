@@ -5,9 +5,19 @@ Tips on writing better package
 
 ## Start with a clear problem
 
+What is the desired input/output? Can it be done with the standard package instead?
+
 e.g.
 - standardize caching interface
 - implement distributed locking
+
+## Categorizing package
+
+- helper/utils
+- extensions
+- common abstraction (your companies core package) for cross cutting concerns (observability)
+- standards (your own definition of standard libraries)
+- test utils (setting up db migration in docker etc, snapshot testing)
 
 ## Methods
 
@@ -42,4 +52,16 @@ The implementation doesnt need to know about the underlying storage.
 
 There are some exceptions, e.g. when it comes to consistency etc like database transaction behaviour. But they should best be documented for clarity if it differs from original design.
 
+## Types
+
+If the package is mostly data structure manipulation or extension of primitives that are not value objects, place them under `types`.
+
+E.g.
+- stringcase
+- timerange
+- interval
+- collections
+- sets
+- orderedmap
+- ttlmap
 
