@@ -42,3 +42,42 @@ func main() {
 
 References:
 - https://medium.com/@felipedutratine/how-to-organize-the-go-struct-in-order-to-save-memory-c78afcf59ec2
+
+## Clearing struct
+
+
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"fmt"
+	"reflect"
+)
+
+func main() {
+	u := User{
+		Name:    "John",
+		Age:     10,
+		Hobbies: []string{"hello"},
+	}
+	doSth(&u)
+	fmt.Println("Hello, 世界", u)
+}
+
+type User struct {
+	Name    string
+	Age     int
+	Hobbies []string
+}
+
+func doSth(u *User) {
+	clear(u)
+}
+
+func clear(v interface{}) {
+	p := reflect.ValueOf(v).Elem()
+	p.Set(reflect.Zero(p.Type()))
+}
+```
