@@ -360,3 +360,25 @@ now := time.Now().In(model.GMTe7)
 startOfDay := now.Add(-12 * time.Hour).Round(24 * time.Hour)
 endOfDay := now.Add(24 * time.Hour)
 ```
+
+## Exponential Decay for effective polling
+
+
+```go
+
+// combination of two curves. the duration increases exponentially in the beginning before beginning to decay.
+// The idea is the wait duration should eventually be lesser and lesser over time.
+func exponentialGrowthDecay(i int) time.Duration {
+	x := float64(i)
+	base := 1.0 + rand.Float64()
+	switch {
+	case x < 4: // intersection point rounded to 4
+		base *= math.Pow(2, x)
+	case x < 10:
+		base *= 5 * math.Log(-0.9*x+10)
+	default:
+	}
+
+	return time.Duration(base*100) * time.Millisecond
+}
+```
