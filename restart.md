@@ -27,6 +27,15 @@ func main() {
 		fmt.Fprintf(w, "hello %s", config)
 	})
 
+	time.AfterFunc(5*time.Second, func() {
+		// Upgrade once.
+		fmt.Println("upgrading...")
+		err := syscall.Kill(syscall.Getpid(), syscall.SIGUSR1)
+		if err != nil {
+			panic(err)
+		}
+	})
+
 	for {
 		code := startServer(":8080", mux)
 		switch code {
