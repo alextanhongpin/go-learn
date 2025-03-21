@@ -122,3 +122,30 @@ func (f *File) Close() error {
 	return f.f.Close()
 }
 ```
+
+## Touch
+
+```go
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	err := TouchFile("test.txt")
+	fmt.Println(os.IsExist(err))
+
+	_, err = os.Stat("hello.txt")
+	fmt.Println(os.IsNotExist(err))
+}
+
+func TouchFile(name string) error {
+	file, err := os.OpenFile(name, os.O_RDONLY|os.O_EXCL|os.O_CREATE, 0644)
+	if err != nil {
+		return err
+	}
+	return file.Close()
+}
+```
