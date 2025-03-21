@@ -133,12 +133,38 @@ import (
 	"os"
 )
 
+func hasTouch(name string) bool {
+	_, err := os.Stat(name)
+	if err == nil {
+		return true
+	}
+
+	if os.IsNotExist(err) {
+		return false
+	}
+
+	panic(err)
+}
+
 func main() {
 	err := TouchFile("test.txt")
 	fmt.Println(os.IsExist(err))
+	fmt.Println(hasTouch("test.txt"))
+	fmt.Println(hasTouch("what.txt"))
 
-	_, err = os.Stat("hello.txt")
+	_, err = os.Stat("non.txt")
 	fmt.Println(os.IsNotExist(err))
+
+	err = touchWithContent("hello.txt", func(f *os.File) error {
+		_, err := f.WriteString("Hello, World!")
+		return err
+	})
+	fmt.Println(os.IsExist(err))
+	b, err := os.ReadFile("hello.txt")
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(string(b))
 }
 
 func TouchFile(name string) error {
@@ -148,4 +174,20 @@ func TouchFile(name string) error {
 	}
 	return file.Close()
 }
+
+func touchWithContent(name string, fn func(f *os.File) error) error {
+	file, err := os.OpenFile(name, os.O_RDWR|os.O_EXCL|os.O_CREATE, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	fmt.Println("writing file...")
+	if err := fn(file); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 ```
