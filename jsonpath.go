@@ -14,6 +14,15 @@ func main() {
 		"name": map[string]any{
 			"age":     1,
 			"hobbies": []any{"1324", "2222"},
+			"meta": []any{
+				map[string]any{
+					"foo": "bar",
+					"bar": "foo",
+				},
+				map[string]any{
+					"foo": "baz",
+				},
+			},
 		},
 	}
 	fmt.Println(set(data, "name.hobbies[1]", "333333"))
@@ -22,6 +31,7 @@ func main() {
 	fmt.Println(get(data, "name.hobbies[1]"))
 	fmt.Println(get(data, "name.age[1]"))
 	fmt.Println(get(data, "name.hobbies.car.foo"))
+	fmt.Println(set(data, "name.meta[].baz.far", "haha"))
 	fmt.Println(get(data, "age"))
 	fmt.Println(data)
 }
@@ -69,7 +79,7 @@ func getter(data any, key any) (any, error) {
 		}
 		value, ok := m[v]
 		if !ok {
-			return nil, errors.New("not found")
+			return nil, ErrNotFound
 		}
 		return value, nil
 	case int:
@@ -80,8 +90,13 @@ func getter(data any, key any) (any, error) {
 		if len(s) < v {
 			return nil, errors.New("index out of range")
 		}
-
 		return s[v], nil
+	case []int:
+		s, ok := data.([]any)
+		if !ok {
+			return nil, errors.New("not a slice")
+		}
+		return s, nil
 	default:
 		return nil, errors.ErrUnsupported
 	}
@@ -90,6 +105,15 @@ func getter(data any, key any) (any, error) {
 func setter(data any, key any, value any) error {
 	switch v := key.(type) {
 	case string:
+		if d, ok := data.([]any); ok {
+			for _, dd := range d {
+				if err := setter(dd, key, value); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+
 		m, ok := data.(map[string]any)
 		if !ok {
 			return errors.New("not a map")
@@ -114,6 +138,9 @@ func split(key string) ([]any, error) {
 	if i > -1 && i < j && j == len(key)-1 {
 		a := key[:i]
 		b := key[i+1 : j]
+		if b == "" {
+			return []any{a, []int{}}, nil
+		}
 		n, err := strconv.Atoi(b)
 		if err != nil {
 			return nil, errors.New("invalid index")
