@@ -12,6 +12,7 @@ RUN update-ca-certificates && apt update && apt install -y tzdata fontconfig && 
  	rm -rf /var/lib/apt/lists/* /tmp/upx-*
 WORKDIR /root/
 RUN find ./bin -name '*.so' -exec chmod +x {} \; && find ./bin -name '*.so' -exec upx -9 -k {} \;
+RUN find ./bin -name '*.so' -exec chmod +x {} \; && find ./bin -name '*.so' -exec upx --best {} \;
 ```
 
 ```
