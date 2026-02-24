@@ -86,20 +86,19 @@ func main() {
 }
 
 func combinations[T any](vs ...[]T) [][]T {
-	var res [][]T
 	var total = 1
 	for i := range vs {
 		total *= len(vs[i])
 	}
+	res := make([][]T, total)
 	for i := range total {
-		var tmp []T
+		res[i] = make([]T, len(vs))
 		var num = 1
 		for j := range len(vs) {
 			den := num
 			num *= len(vs[j])
-			tmp = append(tmp, vs[j][i%num/den])
+			res[i][j] = vs[j][i%num/den]
 		}
-		res = append(res, tmp)
 	}
 	return res
 }
