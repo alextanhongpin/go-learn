@@ -68,3 +68,39 @@ func combinations[T any](vs ...[]T) [][]T {
 	return res
 }
 ```
+
+Another alternative:
+```go
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import "fmt"
+
+func main() {
+	a := []int{1, 2}
+	b := []int{4, 5}
+	c := []int{7, 8}
+	fmt.Println(combinations(a, b, c))
+
+}
+
+func combinations[T any](vs ...[]T) [][]T {
+	var res [][]T
+	var total = 1
+	for i := range vs {
+		total *= len(vs[i])
+	}
+	for i := range total {
+		var tmp []T
+		var num = 1
+		for j := range len(vs) {
+			den := num
+			num *= len(vs[j])
+			tmp = append(tmp, vs[j][i%num/den])
+		}
+		res = append(res, tmp)
+	}
+	return res
+}
+```
