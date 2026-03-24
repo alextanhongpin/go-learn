@@ -66,3 +66,80 @@ func (a *Agent) Run() {
 	}
 }
 ```
+
+
+Cleaner example:
+
+
+```
+// You can edit this code!
+// Click here and start typing.
+package main
+
+import (
+	"bufio"
+	"bytes"
+	"fmt"
+	"io"
+	"iter"
+	"os"
+	"sync"
+	"time"
+)
+
+func main() {
+	r, w := io.Pipe()
+	a1 := New("foo")
+	a2 := New("bar")
+
+	a1.stdin = r
+	a2.stdin = a1.stdout
+	a2.stdout = os.Stdout
+
+	var wg sync.WaitGroup
+	wg.Go(a1.Run)
+	wg.Go(a2.Run)
+
+	for range 3 {
+		fmt.Fprint(w, "hello\nworld\n")
+		time.Sleep(100 * time.Millisecond)
+	}
+	w.Close()
+	wg.Wait()
+	fmt.Println("done")
+}
+
+func Stdin(r io.Reader) iter.Seq[string] {
+	return func(yield func(string) bool) {
+		scanner := bufio.NewScanner(r)
+		for scanner.Scan() {
+			if !yield(scanner.Text()) {
+
+				break
+			}
+		}
+		_ = scanner.Err()
+	}
+}
+
+type Agent struct {
+	name   string
+	stdin  io.Reader
+	stdout io.ReadWriter
+}
+
+func New(name string) *Agent {
+	return &Agent{name, bytes.NewBuffer(nil), bytes.NewBuffer(nil)}
+}
+
+func (a *Agent) Run() {
+	for line := range Stdin(a.stdin) {
+		// Debug
+		if a.stdout != os.Stdout {
+			fmt.Fprintf(os.Stdout, "%s: %s\n", a.name, line)
+		}
+		fmt.Fprintf(a.stdout, "%s: %s\n", a.name, line)
+	}
+}
+
+```
